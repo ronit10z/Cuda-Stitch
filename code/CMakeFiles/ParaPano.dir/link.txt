@@ -1,0 +1,1 @@
+/usr/bin/c++       CMakeFiles/ParaPano.dir/main.cpp.o  -o ParaPano -rdynamic /usr/local/cuda/lib64/libcudart.so /usr/local/cuda/lib64/libcudart.so -lcxcore -lcv -lml -lhighgui -lcvaux -Wl,-rpath,/usr/local/cuda/lib64 

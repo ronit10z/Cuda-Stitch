@@ -1,0 +1,26 @@
+#IncludeRegexLine: ^[ 	]*#[ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/home/ronitb/AFS/private/15418/Cuda-Stitch/code/main.cpp
+iostream
+-
+fstream
+-
+string
+-
+stdio.h
+-
+stdlib.h
+-
+math.h
+-
+limits
+-
+Util.h
+/home/ronitb/AFS/private/15418/Cuda-Stitch/code/Util.h
+
