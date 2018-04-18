@@ -42,10 +42,10 @@ EQUALS = =
 CMAKE_EDIT_COMMAND = /usr/bin/ccmake
 
 # The top-level source directory on which CMake was run.
-CMAKE_SOURCE_DIR = /afs/andrew.cmu.edu/usr15/ronitb/private/15418/Cuda-Stitch/code
+CMAKE_SOURCE_DIR = /home/ronitb/AFS/private/15418/Cuda-Stitch/code
 
 # The top-level build directory on which CMake was run.
-CMAKE_BINARY_DIR = /afs/andrew.cmu.edu/usr15/ronitb/private/15418/Cuda-Stitch/code
+CMAKE_BINARY_DIR = /home/ronitb/AFS/private/15418/Cuda-Stitch/code
 
 #=============================================================================
 # Targets provided globally by CMake.
@@ -72,9 +72,9 @@ rebuild_cache/fast: rebuild_cache
 
 # The main all target
 all: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /afs/andrew.cmu.edu/usr15/ronitb/private/15418/Cuda-Stitch/code/CMakeFiles /afs/andrew.cmu.edu/usr15/ronitb/private/15418/Cuda-Stitch/code/CMakeFiles/progress.marks
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/ronitb/AFS/private/15418/Cuda-Stitch/code/CMakeFiles /home/ronitb/AFS/private/15418/Cuda-Stitch/code/CMakeFiles/progress.marks
 	$(MAKE) -f CMakeFiles/Makefile2 all
-	$(CMAKE_COMMAND) -E cmake_progress_start /afs/andrew.cmu.edu/usr15/ronitb/private/15418/Cuda-Stitch/code/CMakeFiles 0
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/ronitb/AFS/private/15418/Cuda-Stitch/code/CMakeFiles 0
 .PHONY : all
 
 # The main clean target
@@ -102,24 +102,24 @@ depend:
 .PHONY : depend
 
 #=============================================================================
-# Target rules for targets named CUDA-Stitch
+# Target rules for targets named CUDA-STITCH
 
 # Build rule for target.
-CUDA-Stitch: cmake_check_build_system
-	$(MAKE) -f CMakeFiles/Makefile2 CUDA-Stitch
-.PHONY : CUDA-Stitch
+CUDA-STITCH: cmake_check_build_system
+	$(MAKE) -f CMakeFiles/Makefile2 CUDA-STITCH
+.PHONY : CUDA-STITCH
 
 # fast build rule for target.
-CUDA-Stitch/fast:
-	$(MAKE) -f CMakeFiles/CUDA-Stitch.dir/build.make CMakeFiles/CUDA-Stitch.dir/build
-.PHONY : CUDA-Stitch/fast
+CUDA-STITCH/fast:
+	$(MAKE) -f CMakeFiles/CUDA-STITCH.dir/build.make CMakeFiles/CUDA-STITCH.dir/build
+.PHONY : CUDA-STITCH/fast
 
 main.o: main.cpp.o
 .PHONY : main.o
 
 # target to build an object file
 main.cpp.o:
-	$(MAKE) -f CMakeFiles/CUDA-Stitch.dir/build.make CMakeFiles/CUDA-Stitch.dir/main.cpp.o
+	$(MAKE) -f CMakeFiles/CUDA-STITCH.dir/build.make CMakeFiles/CUDA-STITCH.dir/main.cpp.o
 .PHONY : main.cpp.o
 
 main.i: main.cpp.i
@@ -127,7 +127,7 @@ main.i: main.cpp.i
 
 # target to preprocess a source file
 main.cpp.i:
-	$(MAKE) -f CMakeFiles/CUDA-Stitch.dir/build.make CMakeFiles/CUDA-Stitch.dir/main.cpp.i
+	$(MAKE) -f CMakeFiles/CUDA-STITCH.dir/build.make CMakeFiles/CUDA-STITCH.dir/main.cpp.i
 .PHONY : main.cpp.i
 
 main.s: main.cpp.s
@@ -135,7 +135,7 @@ main.s: main.cpp.s
 
 # target to generate assembly for a file
 main.cpp.s:
-	$(MAKE) -f CMakeFiles/CUDA-Stitch.dir/build.make CMakeFiles/CUDA-Stitch.dir/main.cpp.s
+	$(MAKE) -f CMakeFiles/CUDA-STITCH.dir/build.make CMakeFiles/CUDA-STITCH.dir/main.cpp.s
 .PHONY : main.cpp.s
 
 # Help Target
@@ -144,7 +144,7 @@ help:
 	@echo "... all (the default if no target is provided)"
 	@echo "... clean"
 	@echo "... depend"
-	@echo "... CUDA-Stitch"
+	@echo "... CUDA-STITCH"
 	@echo "... edit_cache"
 	@echo "... rebuild_cache"
 	@echo "... main.o"
