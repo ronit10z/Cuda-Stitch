@@ -1,0 +1,10 @@
+#Building in debug(-O0 -g)
+
+cmake -DCMAKE_BUILD_TYPE=Debug
+make
+
+#Building in release(-O3 -funroll-all-loops)
+
+cmake -DCMAKE_BUILD_TYPE=Release
+make
+
