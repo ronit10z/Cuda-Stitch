@@ -11,11 +11,13 @@
 #include "ResponseLayer.hpp"
 #include "FastHessian.hpp"
 #include "Timer.hpp"
+#include "Brief.hpp"
 
 using namespace cv;
 using namespace std;
 
 extern TimeAccumulator timeAccumulator;
+
 //-------------------------------------------------------
 
 static inline void GenerateIntegralImage(const Mat &source, Mat &integralImage);
@@ -41,7 +43,7 @@ int main(int argc, char const *argv[])
   EndTimer(&timeAccumulator, SUMMED_TABLE);
 
   std::vector<InterestPoint> ipts;
-  FastHessian fh(integralImage, ipts, 5, 4, 5, 0.0004f);
+  FastHessian fh(integralImage, ipts, 5, 4, 5, 0.00004f);
   fh.getIpoints();
 
   EndTimer(&timeAccumulator, TOTAL_TIME);
@@ -55,6 +57,8 @@ int main(int argc, char const *argv[])
 
   return 0;
 }
+
+
 
 // pass by reference
 static inline void GenerateIntegralImage(const Mat &source, Mat &integralImage)
@@ -88,36 +92,32 @@ inline int fRound(float flt)
 void drawIpoints(Mat img, vector<InterestPoint> &ipts)
 {
   InterestPoint *ipt;
-  float s, o;
-  int r1, c1, r2, c2, lap;
+  int r1, c1;
 
   for(unsigned int i = 0; i < ipts.size(); i++) 
   {
     ipt = &ipts.at(i);
-    s = (2.5f * ipt->scale);
-    o = ipt->angle;
-    lap = ipt->laplaceValue;
     r1 = fRound(ipt->position.second);
     c1 = fRound(ipt->position.first);
-    c2 = fRound(s * cos(o)) + c1;
-    r2 = fRound(s * sin(o)) + r1;
+    // c2 = fRound(s * cos(o)) + c1;
+    // r2 = fRound(s * sin(o)) + r1;
 
-    if (o) // Green line indicates orientation
-      line(img, Point(c1, r1), Point(c2, r2), Scalar(0, 255, 0));
-    else  // Green dot if using upright version
+    // if (o) // Green line indicates orientation
+    //   line(img, Point(c1, r1), Point(c2, r2), Scalar(0, 255, 0));
+    // else  // Green dot if using upright version
       circle(img, Point(c1,r1), 1, cvScalar(0, 255, 0),-1);
 
-    if (lap == 1)
-    { // Blue circles indicate dark blobs on light backgrounds
-      circle(img, Point(c1,r1), fRound(s), Scalar(255, 0, 0),1);
-    }
-    else if (lap == 0)
-    { // Red circles indicate light blobs on dark backgrounds
-      circle(img, Point(c1,r1), fRound(s), Scalar(0, 0, 255),1);
-    }
-    else if (lap == 9)
-    { // Red circles indicate light blobs on dark backgrounds
-      circle(img, Point(c1,r1), fRound(s), Scalar(0, 255, 0),1);
-    }
+    // if (lap == 1)
+    // { // Blue circles indicate dark blobs on light backgrounds
+    //   circle(img, Point(c1,r1), fRound(s), Scalar(255, 0, 0),1);
+    // }
+    // else if (lap == 0)
+    // { // Red circles indicate light blobs on dark backgrounds
+    //   circle(img, Point(c1,r1), fRound(s), Scalar(0, 0, 255),1);
+    // }
+    // else if (lap == 9)
+    // { // Red circles indicate light blobs on dark backgrounds
+    //   circle(img, Point(c1,r1), fRound(s), Scalar(0, 255, 0),1);
+    // }
   }
 }

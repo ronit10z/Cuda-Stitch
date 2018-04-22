@@ -256,7 +256,7 @@ void FastHessian::interpolateExtremum(int r, int c, ResponseLayer *t, ResponseLa
  
   // Get the offsets to the actual location of the extremum
   double xi = 0, xr = 0, xc = 0;
-  // interpolateStep(r, c, t, m, b, &xi, &xr, &xc );
+  interpolateStep(r, c, t, m, b, &xi, &xr, &xc );
 
   // If point is sufficiently close to the actual extremum
   if( fabs( xi ) < 0.5f  &&  fabs( xr ) < 0.5f  &&  fabs( xc ) < 0.5f )

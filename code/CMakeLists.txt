@@ -19,7 +19,7 @@ include_directories(${OpenCV_INCLUDE_DIRS})
 include_directories(${CUDA_INCLUDE_DIRS})
 include_directories(include)
 
-CUDA_ADD_EXECUTABLE(CUDA-Stitch main.cpp InterestPoint.cpp ResponseLayer.cpp FastHessian.cpp Timer.cpp)
+CUDA_ADD_EXECUTABLE(CUDA-Stitch main.cpp InterestPoint.cpp ResponseLayer.cpp FastHessian.cpp Timer.cpp Brief.cpp)
 #add_executable(ParaPano ${SOURCE_FILES})
 
 target_link_libraries(CUDA-Stitch ${CUDA_LIBRARIES} ${OpenCV_LIBS})
