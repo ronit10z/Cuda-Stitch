@@ -9,6 +9,9 @@
 #include <opencv2/stitching.hpp>
 #include <opencv2/opencv.hpp>
 
+#include "Timer.hpp"
+extern TimeAccumulator timeAccumulator;
+
 using namespace std;
 
 inline float BoxIntegral(Mat img, int row, int col, int rows, int cols) 
@@ -74,10 +77,13 @@ void FastHessian::getIpoints()
   ipts.clear();
 
   // Build the response map
+  StartTimer(&timeAccumulator, RESPONSES);
   buildResponseMap();
+  EndTimer(&timeAccumulator, RESPONSES);
 
   // Get the response layers
   ResponseLayer *b, *m, *t;
+  StartTimer(&timeAccumulator, NMS);
   for (int o = 0; o < octaves; ++o) for (int i = 0; i <= 1; ++i)
   {
     b = responseMap.at(filter_map[o][i]);
@@ -97,6 +103,7 @@ void FastHessian::getIpoints()
       }
     }
   }
+  EndTimer(&timeAccumulator, NMS);
 }
 
 //-------------------------------------------------------

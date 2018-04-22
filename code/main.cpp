@@ -1,5 +1,6 @@
 #include <ctime>
 #include <iostream>
+#include <chrono>
 
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/highgui.hpp>
@@ -9,10 +10,12 @@
 #include "InterestPoint.hpp"
 #include "ResponseLayer.hpp"
 #include "FastHessian.hpp"
+#include "Timer.hpp"
 
 using namespace cv;
 using namespace std;
 
+extern TimeAccumulator timeAccumulator;
 //-------------------------------------------------------
 
 static inline void GenerateIntegralImage(const Mat &source, Mat &integralImage);
@@ -21,19 +24,29 @@ void drawIpoints(Mat img, vector<InterestPoint> &ipts);
 int main(int argc, char const *argv[])
 {
   // Declare Ipoints and other stuff
+  SetupTimer(&timeAccumulator);
+  StartTimer(&timeAccumulator, TOTAL_TIME);
+
   Mat img = imread("../../images/bryce_left_02.png");
+  StartTimer(&timeAccumulator, IMAGE_CONVERSION);
   Mat gray8(img.size(), CV_8U, 1);
   Mat gray32(img.size(), CV_32F, 1);
-
   cvtColor(img, gray8, CV_BGR2GRAY);
   gray8.convertTo(gray32, CV_32F, 1.0/255.0, 0);
+  EndTimer(&timeAccumulator, IMAGE_CONVERSION);
 
+  StartTimer(&timeAccumulator, SUMMED_TABLE);
   Mat integralImage(img.size(), CV_32F, 1);
   GenerateIntegralImage(gray32, integralImage);
+  EndTimer(&timeAccumulator, SUMMED_TABLE);
 
   std::vector<InterestPoint> ipts;
-  FastHessian fh(integralImage, ipts, 5, 4, 2, 0.0004f);
+  FastHessian fh(integralImage, ipts, 5, 4, 5, 0.0004f);
   fh.getIpoints();
+
+  EndTimer(&timeAccumulator, TOTAL_TIME);
+  PrintTimes(&timeAccumulator);
+  printf("Number of Interest Points Detected = %u\n", (uint32_t)ipts.size());
 
   drawIpoints(img, ipts);
 
