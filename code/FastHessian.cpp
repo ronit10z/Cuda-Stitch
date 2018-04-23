@@ -1,5 +1,3 @@
-
-
 #include <vector>
 
 #include "FastHessian.hpp"
