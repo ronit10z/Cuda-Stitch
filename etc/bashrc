@@ -1,0 +1,7 @@
+export PATH=$PATH:/usr/local/depot/ispc-v1.9.1-linux/.
+export PATH=/usr/local/depot/cuda-8.0/bin:${PATH}
+export LD_LIBRARY_PATH=/usr/local/depot/cuda-8.0/lib64/:$LD_LIBRARY_PATH
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib64
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/afs/cs.cmu.edu/academic/class/15418-s18/public/opencv-418/lib64
+export PATH=/afs/cs.cmu.edu/academic/class/15418-s18/public/opencv-418:${PATH}
+export PATH=$PATH:/usr/lib64/openmpi/bin
