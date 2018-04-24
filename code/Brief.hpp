@@ -37,25 +37,20 @@ typedef std::vector<FourTuple> FourTupleVector;
 class Brief
 {
 public:
-	Brief(cv::Mat &img, std::vector<InterestPoint> &ipts, FourTupleVector &briefPairs,int patchSize);
+	Brief(FourTupleVector &briefPairs,int patchSize);
 	~Brief();
 	int ReadFile(const char* filename);
-	void ComputeBriefDescriptor(std::vector<BriefPointDescriptor> &descripts);
+	void ComputeBriefDescriptor(const cv::Mat &img, std::vector<InterestPoint> &ipts, std::vector<BriefPointDescriptor> &desiciptorVector);
 
-	
-	cv::Mat &greyImage;
-	std::vector<InterestPoint> &ipts;
-	int width;
-	int height;
 	int patchSize;
 	int patchWidth;
 	int numBriefPairs;
 	FourTupleVector &briefPairs;
 	
 private:
-	bool isValidPoint(const InterestPoint &ipt);
-	void computeSingleBriefDescriptor(const InterestPoint &ipt, BriefPointDescriptor &descript);
-
+	bool isValidPoint(const InterestPoint &ipt, float width, float height);
+	void ComputeSingleBriefDescriptor(const cv::Mat &greyImage, const InterestPoint &ipt, BriefPointDescriptor &descriptor);
+	
 };
 
 void FindMatches(vector<BriefPointDescriptor> &descripts1, 
