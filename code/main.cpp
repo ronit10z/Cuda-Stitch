@@ -27,6 +27,8 @@ static inline void GenerateIntegralImage(const Mat &source, Mat &integralImage_1
 void drawIpoints(Mat img_1, vector<InterestPoint> &ipts);
 static inline void GetPanSize(double &xMin, double &xMax, double &yMin, double &yMax, Mat &img, Mat &homographyMat);
 Mat getTranslationMatrix(float x, float y);
+void stitch(int height, int width, Mat &img_1, Mat &img_2, 
+  Mat &homographyMat_1, Mat &homographyMat_2);
 
 int main(int argc, char const *argv[])
 {
@@ -103,12 +105,13 @@ int main(int argc, char const *argv[])
   Mat transM = getTranslationMatrix(shiftX, shiftY);
 
   // initialize empty panorama
-  // int width = std::round(xMax - xMin);
-  // int height = std::round(yMax - yMin);
+  int width = std::round(xMax - xMin);
+  int height = std::round(yMax - yMin);
 
   homographyMat_1 = (homographyMat_1*transM) / homographyMat_1.at<float>(2, 2);
   homographyMat_2 = (homographyMat_2*transM) / homographyMat_2.at<float>(2, 2);
 
+  stitch(height, width, img_1, img_2, homographyMat_1, homographyMat_2);
 
   EndTimer(&timeAccumulator, TOTAL_TIME);
 
@@ -149,21 +152,21 @@ Mat createMask(Mat& im)
 }
 
 Mat stitchImages(Mat& pano, Mat& image, Mat& H, Mat& pano_mask, Mat& img_mask) {
-    int width = pano.cols;
-    int height = pano.rows;
+  int width = pano.cols;
+  int height = pano.rows;
 
-    Mat image_warped;
-    image_warped.create(image.size(), image.type());
+  Mat image_warped;
+  image_warped.create(image.size(), image.type());
 
-    warpPerspective(image, image_warped, H, Size(width, height));
+  warpPerspective(image, image_warped, H, Size(width, height));
 
-    Mat bim1, bim2;
-    multiply(pano, pano_mask, bim1);
-    multiply(image_warped, img_mask, bim2);
+  Mat bim1, bim2;
+  multiply(pano, pano_mask, bim1);
+  multiply(image_warped, img_mask, bim2);
 
-    Mat stitch_img;
-    divide(bim1 + bim2, pano_mask + img_mask, stitch_img);
-    return stitch_img;
+  Mat stitch_img;
+  divide(bim1 + bim2, pano_mask + img_mask, stitch_img);
+  return stitch_img;
 }
 
 void stitch(int height, int width, Mat &img_1, Mat &img_2, 
