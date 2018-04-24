@@ -1,18 +1,22 @@
 #include <fstream>
+#include <climits>
 
 #include "Brief.hpp"
 
 using namespace std;
 using namespace cv;
 
-//set a bit in the brief desciptor, where index is a position in 0..255 inclusive
-//and val is the value to set the bit to
-void brief_set(int index, bool val, Brief_Point_Descriptor &descript) {
-  if (index < 0 || index > 255) {
+#define THRESHOLD 0.8
+
+// sets the bit corresponding to the index to val.
+void BriefSet(int index, bool val, BriefPointDescriptor &descript) {
+  if (index < 0 || index > 255) 
+  {
     printf("Index out of bounds for 256 bit descriptor");
     return;
   }
-  if (val == 1) {
+  if (val == 1) 
+  {
     //calculate the array element we need to go to
     int idx = index / 64; //idx is the element we need to be inside
     int offset = index % 64; //offset is the position inside of the element
@@ -23,11 +27,12 @@ void brief_set(int index, bool val, Brief_Point_Descriptor &descript) {
 }
 
 //spit out the descriptor in bit form on cout for debugging if needed
-void print_brief_descriptor(Brief_Point_Descriptor &descript) {
+void PrintBriefDescriptor(BriefPointDescriptor &descript) {
   std::cout << std::bitset<64>(descript.desc_array[3]) << std::bitset<64>(descript.desc_array[2])
     << std::bitset<64>(descript.desc_array[1]) << std::bitset<64>(descript.desc_array[0]);
 }
 
+// Just save all the arguements.
 Brief::Brief(cv::Mat &img, std::vector<InterestPoint> &ipts, FourTupleVector &briefPairs,int patchSize):
 greyImage(img), ipts(ipts), briefPairs(briefPairs)
 {
@@ -43,9 +48,8 @@ Brief::~Brief()
 
 }
 
-//Read from the given file, which contains pairs of points to use while
-//calculating the brief descriptor
-void Brief::ReadFile(const char* filename)
+// 
+int Brief::ReadFile(const char* filename)
 {
 	ifstream infile;
 	infile.open(filename);
@@ -68,9 +72,10 @@ void Brief::ReadFile(const char* filename)
 
   	}
 
+  return this->numBriefPairs;
 }
 
-//Determine if the patch of the point (given patch size) is in the image scope
+//Determine if the point is within bounds
 bool Brief::isValidPoint(const InterestPoint &ipt) 
 {
   float col = ipt.position.first;
@@ -82,13 +87,25 @@ bool Brief::isValidPoint(const InterestPoint &ipt)
   return (row - dist >= 0 && col - dist >= 0 && row + dist <= height && col + dist <= width);
 }
 
-//Given an image and an interestpoint and the list of points to compare, compute one
-//BRIEF descriptor for that interestpoint
+// loops over all the points and calculates the descripter if the point is within bounds.
+void Brief::ComputeBriefDescriptor(std::vector<BriefPointDescriptor> &descripts)
+{
+  std::vector<InterestPoint>::iterator it;
+  
+  for (uint32_t i = 0; i < ipts.size(); i++)
+  {
+    InterestPoint &ipoint = this->ipts[i];
+    BriefPointDescriptor &descript = descripts[i];
 
-//technically don't need to move the entire img into here
-//could store the values in the patch around the point somewhere and just move that
-//around
-void Brief::computeSingleBriefDescriptor(const InterestPoint &ipt, Brief_Point_Descriptor &descript)
+    if (isValidPoint(ipoint))
+    {
+      computeSingleBriefDescriptor(ipoint, descript);
+    }
+  }
+}
+
+// Calulates the descipter for a given point
+void Brief::computeSingleBriefDescriptor(const InterestPoint &ipt, BriefPointDescriptor &descript)
 {
   int r = ipt.position.first;
   int c = ipt.position.second;
@@ -98,8 +115,6 @@ void Brief::computeSingleBriefDescriptor(const InterestPoint &ipt, Brief_Point_D
 
   for (int idx = 0; idx < this->numBriefPairs; idx++)
   {
-    //x1..y2 are all between -4 and 4, inclusive
-    //representing relative offsets from r,c
     int x1 = briefPairs[idx].x1;
     int y1 = briefPairs[idx].y1;
     int x2 = briefPairs[idx].x2;
@@ -108,33 +123,68 @@ void Brief::computeSingleBriefDescriptor(const InterestPoint &ipt, Brief_Point_D
     float pixel1 = greyImage.at<float>(r + x1, c + y1);
     float pixel2 = greyImage.at<float>(r + x2, c + y2);
 
-    //set bit in brief descriptor according to comparison of pixel1 and pixel2
-    brief_set(idx, pixel1 < pixel2, descript);
+    BriefSet(idx, pixel1 < pixel2, descript);
   }
 }
 
-
-//Given an image, a vector of interest points, and the lists of points to compare for BRIEF
-//return an object containing the BRIEF descriptor for each interest point
-void Brief::computeBriefDesciptor(std::vector<Brief_Point_Descriptor> &descripts)
+static inline int CountOnes(uint64_t num)
 {
-  //need to loop over interestpoints, and run computeSingleBriefDescriptor, 
-  //and push results on some vectors
-
-  std::vector<InterestPoint>::iterator it;
-  
-  for (uint32_t i = 0; i < ipts.size(); i++)
+  int count = 0;
+  while(num != 0)
   {
-    InterestPoint &ipoint = this->ipts[i];
-    Brief_Point_Descriptor &descript = descripts[i];
+    count += (num & 0x1);
+    num >>= 1;
+  }
 
-    if (isValidPoint(ipoint))
+  return count;
+}
+
+// returns the hamming distance between two descripters
+static inline int FindDistance(const BriefPointDescriptor &descriptor1, const BriefPointDescriptor &descriptor2)
+{
+  int xor1 = descriptor1.desc_array[0] ^ descriptor2.desc_array[0];
+  int xor2 = descriptor1.desc_array[1] ^ descriptor2.desc_array[1];   
+  int xor3 = descriptor1.desc_array[2] ^ descriptor2.desc_array[2];   
+  int xor4 = descriptor1.desc_array[3] ^ descriptor2.desc_array[3];
+
+  return CountOnes(xor1) + CountOnes(xor2) + CountOnes(xor3) + CountOnes(xor4);
+}
+
+// pass in the descipts for the two things you want to match, as well as a reference to two empty cv::Point vectors
+void FindMatches(vector<BriefPointDescriptor> &descripts1, 
+  vector<BriefPointDescriptor> &descripts2, vector<cv::Point>points1,
+  vector<cv::Point>points2)
+{
+  vector<int> indices;
+  vector<float> firstSecondRatio;
+
+  indices.reserve(descripts1.size());
+  firstSecondRatio.reserve(descripts2.size());
+
+  for (uint32_t i = 0; i < descripts1.size(); ++i)
+  {
+    BriefPointDescriptor &descriptor1 = descripts1[i];
+    int bestDistance = INT_MAX;
+    int secondBest = INT_MAX;
+    int bestj = 0;
+    for (uint32_t j = 0; j < descripts2.size(); ++j)
     {
-      computeSingleBriefDescriptor(ipoint, descript);
+      BriefPointDescriptor &descriptor2 = descripts2[j];
+      int distance = FindDistance(descriptor1, descriptor2);
+
+      if (distance < bestDistance)
+      {
+        bestj = j;
+        secondBest = bestDistance;
+        bestDistance = distance;
+      }
+      else if(distance < secondBest) secondBest = distance;
+    }
+    float ratio = static_cast<float>(bestDistance) / static_cast<float>(secondBest);
+    if (ratio < THRESHOLD)
+    {
+      points1.push_back(Point(descripts1[i].col, descripts1[i].row));
+      points2.push_back(Point(descripts1[bestj].col, descripts1[bestj].row));
     }
   }
 }
-
-
-
-
