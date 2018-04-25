@@ -44,6 +44,12 @@ static inline int CountOnes(uint64_t num)
   return count;
 }
 
+//spit out the descriptor in bit form on cout for debugging if needed
+void printBriefDescriptor(BriefPointDescriptor &descript) {
+  std::cout << std::bitset<64>(descript.desc_array[3]) << std::bitset<64>(descript.desc_array[2])
+    << std::bitset<64>(descript.desc_array[1]) << std::bitset<64>(descript.desc_array[0]) << "\n";
+}
+
 int main(int argc, char const *argv[])
 {
   // TODO: change filename to command line arguement, have assert or 
@@ -100,37 +106,38 @@ int main(int argc, char const *argv[])
   vector<BriefPointDescriptor> desiciptorVector2;
   briefDescriptor.ComputeBriefDescriptor(gray32_2, ipts_2, desiciptorVector2);
   // get both desciptors
-  // printf("Number of Interest Points Detected in im1 = %u\n", (uint32_t)ipts_1.size());
-  // printf("descriptVector1 length = %lu\n", desiciptorVector1.size());
-  // printf("descriptVector2 length = %lu\n", desiciptorVector2.size());
+  printf("Number of Interest Points Detected in im1 = %u\n", (uint32_t)ipts_1.size());
+  printf("descriptVector1 length = %lu\n", desiciptorVector1.size());
+  printf("descriptVector2 length = %lu\n", desiciptorVector2.size());
 
-  vector<cv::Point2f>points_1;
-  vector<cv::Point2f>points_2;
+  vector<cv::Point>points_1;
+  vector<cv::Point>points_2;
   FindMatches(desiciptorVector1, desiciptorVector2, points_1, points_2);
 
-  // printf("number of matches = %lu\n", points_1.size());
+  printf("number of matches = %lu\n", points_1.size());
 
-  // Mat homographyMat_1 = (Mat::eye(3, 3, CV_32F));
-  // Mat homographyMat_2 = cv::findHomography(points_2, points_1, cv::RANSAC, 4.0) * homographyMat_1;
-  // homographyMat_2.convertTo(homographyMat_2, CV_32F);
+  Mat homographyMat_1 = (Mat::eye(3, 3, CV_32F));
+  Mat homographyMat_2 = cv::findHomography(points_2, points_1, cv::RANSAC, 4.0);
+  homographyMat_2.convertTo(homographyMat_2, CV_32F);
+  homographyMat_2 = homographyMat_1 * homographyMat_2;
+  
+  double xMin, yMin = INT_MAX;
+  double xMax, yMax = 0;
+  GetPanSize(xMin, xMax, yMin, yMax, img_1, homographyMat_1);
+  GetPanSize(xMin, xMax, yMin, yMax, img_2, homographyMat_2);
 
-  // double xMin, yMin = INT_MAX;
-  // double xMax, yMax = 0;
-  // GetPanSize(xMin, xMax, yMin, yMax, img_1, homographyMat_1);
-  // GetPanSize(xMin, xMax, yMin, yMax, img_2, homographyMat_2);
-
-  // double shiftX = -xMin;
-  // double shiftY = -yMin;
-  // Mat transM = getTranslationMatrix(shiftX, shiftY);
+  double shiftX = -xMin;
+  double shiftY = -yMin;
+  Mat transM = getTranslationMatrix(shiftX, shiftY);
 
   // // initialize empty panorama
-  // int width = std::round(xMax - xMin);
-  // int height = std::round(yMax - yMin);
 
-  // homographyMat_1 = (homographyMat_1*transM) / homographyMat_1.at<float>(2, 2);
-  // homographyMat_2 = (homographyMat_2*transM) / homographyMat_2.at<float>(2, 2);
+  homographyMat_1 = (homographyMat_1*transM) / homographyMat_1.at<float>(2, 2);
+  homographyMat_2 = (homographyMat_2*transM) / homographyMat_2.at<float>(2, 2);
 
-  // stitch(height, width, img_1, img_2, homographyMat_1, homographyMat_2);
+  int width = std::round(xMax - xMin);
+  int height = std::round(yMax - yMin);
+  stitch(height, width, img_1, img_2, homographyMat_1, homographyMat_2);
 
   EndTimer(&timeAccumulator, TOTAL_TIME);
 
@@ -171,7 +178,8 @@ Mat createMask(Mat& im)
   return mask;
 }
 
-Mat stitchImages(Mat& pano, Mat& image, Mat& H, Mat& pano_mask, Mat& img_mask) {
+Mat stitchImages(Mat& pano, Mat& image, Mat& H, Mat& pano_mask, Mat& img_mask) 
+{
   int width = pano.cols;
   int height = pano.rows;
 
@@ -182,6 +190,7 @@ Mat stitchImages(Mat& pano, Mat& image, Mat& H, Mat& pano_mask, Mat& img_mask) {
 
   Mat bim1, bim2;
   multiply(pano, pano_mask, bim1);
+  img_mask.convertTo(img_mask, image_warped.type());
   multiply(image_warped, img_mask, bim2);
 
   Mat stitch_img;
@@ -197,6 +206,7 @@ void stitch(int height, int width, Mat &img_1, Mat &img_2,
 
   Mat imgMask_1 = createMask(img_1);
   cv::warpPerspective(imgMask_1, imgMask_1, homographyMat_1, Size(width, height));
+  // BUG ON NEXT LINE
   panorama = stitchImages(panorama, img_1, homographyMat_1, pano_mask, imgMask_1);
   pano_mask += imgMask_1;
 

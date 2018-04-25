@@ -54,5 +54,5 @@ private:
 };
 
 void FindMatches(vector<BriefPointDescriptor> &descripts1, 
-  vector<BriefPointDescriptor> &descripts2, vector<cv::Point2f>points1,
-  vector<cv::Point2f>points2);
+  vector<BriefPointDescriptor> &descripts2, vector<cv::Point> &points1,
+  vector<cv::Point> &points2);
