@@ -1,6 +1,7 @@
 #include <ctime>
 #include <iostream>
 #include <chrono>
+#include <bitset>
 
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/highgui.hpp>
@@ -29,6 +30,19 @@ static inline void GetPanSize(double &xMin, double &xMax, double &yMin, double &
 Mat getTranslationMatrix(float x, float y);
 void stitch(int height, int width, Mat &img_1, Mat &img_2, 
   Mat &homographyMat_1, Mat &homographyMat_2);
+
+
+static inline int CountOnes(uint64_t num)
+{
+  int count = 0;
+  while(num != 0)
+  {
+    count += (num & 0x1);
+    num >>= 1;
+  }
+
+  return count;
+}
 
 int main(int argc, char const *argv[])
 {
@@ -67,11 +81,11 @@ int main(int argc, char const *argv[])
 
   // Compute Interest Points from summed table representation
   std::vector<InterestPoint> ipts_1;
-  FastHessian fh_1(integralImage_1, ipts_1, 5, 4, 5, 0.00004f);
+  FastHessian fh_1(integralImage_1, ipts_1, 5, 4, 2, 0.00004f);
   fh_1.getIpoints();
 
   std::vector<InterestPoint> ipts_2;
-  FastHessian fh_2(integralImage_2, ipts_2, 5, 4, 5, 0.00004f);
+  FastHessian fh_2(integralImage_2, ipts_2, 5, 4, 2, 0.00004f);
   fh_2.getIpoints();
 
   // Compute Brief Descriptor based off interest points
@@ -86,46 +100,52 @@ int main(int argc, char const *argv[])
   vector<BriefPointDescriptor> desiciptorVector2;
   briefDescriptor.ComputeBriefDescriptor(gray32_2, ipts_2, desiciptorVector2);
   // get both desciptors
+  // printf("Number of Interest Points Detected in im1 = %u\n", (uint32_t)ipts_1.size());
+  // printf("descriptVector1 length = %lu\n", desiciptorVector1.size());
+  // printf("descriptVector2 length = %lu\n", desiciptorVector2.size());
 
-  vector<cv::Point>points_1;
-  vector<cv::Point>points_2;
+  vector<cv::Point2f>points_1;
+  vector<cv::Point2f>points_2;
   FindMatches(desiciptorVector1, desiciptorVector2, points_1, points_2);
 
-  Mat homographyMat_2 = cv::findHomography(points_2, points_1, cv::RANSAC, 4.0);
-  homographyMat_2.convertTo(homographyMat_2, CV_32F);
-  Mat homographyMat_1 = (Mat::eye(3, 3, CV_32F)) * homographyMat_2;
+  // printf("number of matches = %lu\n", points_1.size());
 
-  double xMin, yMin = INT_MAX;
-  double xMax, yMax = 0;
-  GetPanSize(xMin, xMax, yMin, yMax, img_1, homographyMat_1);
-  GetPanSize(xMin, xMax, yMin, yMax, img_2, homographyMat_2);
+  // Mat homographyMat_1 = (Mat::eye(3, 3, CV_32F));
+  // Mat homographyMat_2 = cv::findHomography(points_2, points_1, cv::RANSAC, 4.0) * homographyMat_1;
+  // homographyMat_2.convertTo(homographyMat_2, CV_32F);
 
-  double shiftX = -xMin;
-  double shiftY = -yMin;
-  Mat transM = getTranslationMatrix(shiftX, shiftY);
+  // double xMin, yMin = INT_MAX;
+  // double xMax, yMax = 0;
+  // GetPanSize(xMin, xMax, yMin, yMax, img_1, homographyMat_1);
+  // GetPanSize(xMin, xMax, yMin, yMax, img_2, homographyMat_2);
 
-  // initialize empty panorama
-  int width = std::round(xMax - xMin);
-  int height = std::round(yMax - yMin);
+  // double shiftX = -xMin;
+  // double shiftY = -yMin;
+  // Mat transM = getTranslationMatrix(shiftX, shiftY);
 
-  homographyMat_1 = (homographyMat_1*transM) / homographyMat_1.at<float>(2, 2);
-  homographyMat_2 = (homographyMat_2*transM) / homographyMat_2.at<float>(2, 2);
+  // // initialize empty panorama
+  // int width = std::round(xMax - xMin);
+  // int height = std::round(yMax - yMin);
 
-  stitch(height, width, img_1, img_2, homographyMat_1, homographyMat_2);
+  // homographyMat_1 = (homographyMat_1*transM) / homographyMat_1.at<float>(2, 2);
+  // homographyMat_2 = (homographyMat_2*transM) / homographyMat_2.at<float>(2, 2);
+
+  // stitch(height, width, img_1, img_2, homographyMat_1, homographyMat_2);
 
   EndTimer(&timeAccumulator, TOTAL_TIME);
 
-  PrintTimes(&timeAccumulator);
-  printf("Number of Interest Points Detected = %u\n", (uint32_t)ipts_1.size());
-
-  drawIpoints(img_1, ipts_1);
-  drawIpoints(img_2, ipts_2);
+  // PrintTimes(&timeAccumulator);
+  // printf("Number of Interest Points Detected in im2 = %u\n", (uint32_t)ipts_2.size());
 
 
-  imshow("image 1", img_1);
-  imshow("image 2", img_2);
+  // drawIpoints(img_1, ipts_1);
+  // drawIpoints(img_2, ipts_2);
 
-  waitKey(0);
+
+  // imshow("image 1", img_1);
+  // imshow("image 2", img_2);
+
+  // waitKey(0);
 
   return 0;
 }

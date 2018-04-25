@@ -59,7 +59,7 @@ int Brief::ReadFile(const char* filename)
   }
   	//get the number of pairs that we want to use to form the descriptor
   	infile >> (this->numBriefPairs);
-    this->briefPairs.reserve(this->numBriefPairs);
+    this->briefPairs.resize(this->numBriefPairs);
   	
   	int x1, y1, x2, y2;
   	for (int i = 0; i < this->numBriefPairs; i++) {
@@ -99,11 +99,13 @@ void Brief::ComputeBriefDescriptor(const cv::Mat &img, std::vector<InterestPoint
 
     if (isValidPoint(ipoint, width, height))
     {
-      BriefPointDescriptor &descriptor = desiciptorVector[j++];
+      BriefPointDescriptor descriptor = desiciptorVector[j++];
       ComputeSingleBriefDescriptor(img, ipoint, descriptor);
     }
   }
+  desiciptorVector.resize(j);
 }
+
 
 // Calulates the descipter for a given point
 void Brief::ComputeSingleBriefDescriptor(const cv::Mat &greyImage, const InterestPoint &ipt, BriefPointDescriptor &descriptor)
@@ -142,7 +144,7 @@ static inline int CountOnes(uint64_t num)
 }
 
 // returns the hamming distance between two descripters
-static inline int FindDistance(const BriefPointDescriptor &descriptor1, const BriefPointDescriptor &descriptor2)
+static inline int FindDistance(BriefPointDescriptor &descriptor1, BriefPointDescriptor &descriptor2)
 {
   int xor1 = descriptor1.desc_array[0] ^ descriptor2.desc_array[0];
   int xor2 = descriptor1.desc_array[1] ^ descriptor2.desc_array[1];   
@@ -154,18 +156,21 @@ static inline int FindDistance(const BriefPointDescriptor &descriptor1, const Br
 
 // pass in the descipts for the two things you want to match, as well as a reference to two empty cv::Point vectors
 void FindMatches(vector<BriefPointDescriptor> &descripts1, 
-  vector<BriefPointDescriptor> &descripts2, vector<cv::Point>points1,
-  vector<cv::Point>points2)
+  vector<BriefPointDescriptor> &descripts2, vector<cv::Point2f>points1,
+  vector<cv::Point2f>points2)
 {
   for (uint32_t i = 0; i < descripts1.size(); ++i)
   {
-    const BriefPointDescriptor &descriptor1 = descripts1[i];
+    BriefPointDescriptor &descriptor1 = descripts1[i];
     int bestDistance = INT_MAX;
     int secondBest = INT_MAX;
     int bestj = 0;
+
+    PrintBriefDescriptor(descriptor1);
+    exit(1);
     for (uint32_t j = 0; j < descripts2.size(); ++j)
     {
-      const BriefPointDescriptor &descriptor2 = descripts2[j];
+      BriefPointDescriptor &descriptor2 = descripts2[j];
       int distance = FindDistance(descriptor1, descriptor2);
 
       if (distance < bestDistance)
@@ -177,10 +182,11 @@ void FindMatches(vector<BriefPointDescriptor> &descripts1,
       else if(distance < secondBest) secondBest = distance;
     }
     float ratio = static_cast<float>(bestDistance) / static_cast<float>(secondBest);
+    printf("best Distance = %d, secondBest = %d, ratio = %f\n", bestDistance, secondBest, ratio);
     if (ratio < THRESHOLD)
     {
-      points1.push_back(Point(descripts1[i].col, descripts1[i].row));
-      points2.push_back(Point(descripts1[bestj].col, descripts1[bestj].row));
+      points1.push_back(Point2f(descripts1[i].col, descripts1[i].row));
+      points2.push_back(Point2f(descripts1[bestj].col, descripts1[bestj].row));
     }
   }
 }
