@@ -14,7 +14,7 @@ void PrintBriefDescriptor(BriefPointDescriptor &descript) {
   descript.desc_array[2], descript.desc_array[3]);
 }
 // sets the bit corresponding to the index to val.
-static inline void BriefSet(int index, bool val, BriefPointDescriptor &descriptor) {
+static inline void BriefSet(int index, bool val, BriefPointDescriptor &descriptor, int k) {
   if (index < 0 || index > 255) 
   {
     printf("Index out of bounds for 256 bit descriptor");
@@ -29,7 +29,7 @@ static inline void BriefSet(int index, bool val, BriefPointDescriptor &descripto
     long mask = 1L << offset;
     descriptor.desc_array[idx] |= mask;
   }
-  // PrintBriefDescriptor(descriptor);
+  if (k == 119) PrintBriefDescriptor(descriptor);
 
 }
 
@@ -97,7 +97,8 @@ bool Brief::isValidPoint(const Point &ipt, int width, int height)
 {
   int col = (ipt.x);
   int row = (ipt.y);
-  int dist = (this->patchWidth);
+  // int dist = (this->patchWidth);
+  int dist = 4;
 
   return isInBound(row - dist, col - dist, height, width) && isInBound(row + dist, col + dist,height,width); 
 }
@@ -147,9 +148,9 @@ void Brief::ComputeBriefDescriptor(const cv::Mat &img, std::vector<Point> &ipts,
         float pixel1 = patch[y1][x1];
         float pixel2 = patch[y2][x2];
 
-        // printf("(%d, %d) = %f | (%d, %d) = %f\n", x1, y1, pixel1, x2, y2, pixel2);
-        // printf("%d %d\n", idx, pixel1 < pixel2);
-        BriefSet(idx, pixel1 < pixel2, desiciptorVector[j]);
+        if (k == 119) printf("(%d, %d) = %f | (%d, %d) = %f\n", x1, y1, pixel1, x2, y2, pixel2);
+        // if (k == 119) printf("%d %d ", idx, pixel1 < pixel2);
+        BriefSet(idx, pixel1 < pixel2, desiciptorVector[j], k);
       }
       // printf("row = %d  col = %d ", row, col);
       // PrintBriefDescriptor(desiciptorVector[j]);
@@ -162,28 +163,28 @@ void Brief::ComputeBriefDescriptor(const cv::Mat &img, std::vector<Point> &ipts,
 
 
 // Calulates the descipter for a given point
-void Brief::ComputeSingleBriefDescriptor(const cv::Mat &greyImage, const Point &ipt, BriefPointDescriptor &descriptor)
-{
-  // position is (x, y)
-  int c = ipt.x;
-  int r = ipt.y;
+// void Brief::ComputeSingleBriefDescriptor(const cv::Mat &greyImage, const Point &ipt, BriefPointDescriptor &descriptor)
+// {
+//   // position is (x, y)
+//   int c = ipt.x;
+//   int r = ipt.y;
 
-  descriptor.col = ipt.x;
-  descriptor.row = ipt.y;
+//   descriptor.col = ipt.x;
+//   descriptor.row = ipt.y;
 
-  for (int idx = 0; idx < this->numBriefPairs; idx++)
-  {
-    int x1 = briefPairs[idx].x1;
-    int y1 = briefPairs[idx].y1;
-    int x2 = briefPairs[idx].x2;
-    int y2 = briefPairs[idx].y2;
+//   for (int idx = 0; idx < this->numBriefPairs; idx++)
+//   {
+//     int x1 = briefPairs[idx].x1;
+//     int y1 = briefPairs[idx].y1;
+//     int x2 = briefPairs[idx].x2;
+//     int y2 = briefPairs[idx].y2;
 
-    float pixel1 = greyImage.at<float>(r + x1, c + y1);
-    float pixel2 = greyImage.at<float>(r + x2, c + y2);
+//     float pixel1 = greyImage.at<float>(r + x1, c + y1);
+//     float pixel2 = greyImage.at<float>(r + x2, c + y2);
 
-    BriefSet(idx, pixel1 < pixel2, descriptor);
-  }
-}
+//     BriefSet(idx, pixel1 < pixel2, descriptor);
+//   }
+// }
 
 static inline int CountOnes(uint64_t num)
 {
@@ -200,10 +201,10 @@ static inline int CountOnes(uint64_t num)
 // returns the hamming distance between two descripters
 static inline int FindDistance(BriefPointDescriptor &descriptor1, BriefPointDescriptor &descriptor2)
 {
-  int xor1 = descriptor1.desc_array[0] ^ descriptor2.desc_array[0];
-  int xor2 = descriptor1.desc_array[1] ^ descriptor2.desc_array[1];   
-  int xor3 = descriptor1.desc_array[2] ^ descriptor2.desc_array[2];   
-  int xor4 = descriptor1.desc_array[3] ^ descriptor2.desc_array[3];
+  uint64_t xor1 = descriptor1.desc_array[0] ^ descriptor2.desc_array[0];
+  uint64_t xor2 = descriptor1.desc_array[1] ^ descriptor2.desc_array[1];   
+  uint64_t xor3 = descriptor1.desc_array[2] ^ descriptor2.desc_array[2];   
+  uint64_t xor4 = descriptor1.desc_array[3] ^ descriptor2.desc_array[3];
 
   return CountOnes(xor1) + CountOnes(xor2) + CountOnes(xor3) + CountOnes(xor4);
 }
@@ -225,6 +226,7 @@ void FindMatches(vector<BriefPointDescriptor> &descripts1,
       BriefPointDescriptor &descriptor2 = descripts2[j];
       int distance = FindDistance(descriptor1, descriptor2);
 
+      // printf("%d %d\n", j, distance);
       if (distance < bestDistance)
       {
         bestj = j;
@@ -233,14 +235,17 @@ void FindMatches(vector<BriefPointDescriptor> &descripts1,
       }
       else if(distance < secondBest) secondBest = distance;
     }
-    float ratio = static_cast<float>(bestDistance) / static_cast<float>(secondBest);
-    if (secondBest == 0) ratio = 0;
+    float ratio;
+    if (secondBest == 0) ratio = bestDistance;
+    else ratio = static_cast<float>(bestDistance) / static_cast<float>(secondBest);  
+    
     // printf("best Distance = %d, secondBest = %d, ratio = %f\n", bestDistance, secondBest, ratio);
     if (ratio < THRESHOLD)
     {
-      // printf("Match !\n");
+      // printf("best j = %d\n", bestj);
       points1.push_back(Point(descripts1[i].col, descripts1[i].row));
       points2.push_back(Point(descripts2[bestj].col, descripts2[bestj].row));
     }
+    // exit(1);
   }
 }

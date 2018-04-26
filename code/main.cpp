@@ -104,14 +104,22 @@ int main(int argc, char const *argv[])
 
   for (uint32_t i = 0; i < desiciptorVector1.size(); ++i)
   {
-    printf("%d %d\n", desiciptorVector1[i].row, desiciptorVector1[i].col);
+    printf("%lu %lu %lu %lu\n", desiciptorVector1[i].desc_array[0], desiciptorVector1[i].desc_array[1], 
+      desiciptorVector1[i].desc_array[2], desiciptorVector1[i].desc_array[3]);
   }
-
   exit(1);
+
   vector<cv::Point>points_1;
   vector<cv::Point>points_2;
   FindMatches(desiciptorVector1, desiciptorVector2, points_1, points_2);
 
+  // for (uint32_t i = 0; i < points_2.size(); ++i)
+  // {
+  //   printf("%d %d\n", points_2[i].x, points_2[i].y);
+  // }
+
+
+  // exit(1);
 
   Mat homographyMat_1 = (Mat::eye(3, 3, CV_32F));
   Mat homographyMat_2 = cv::findHomography(points_2, points_1, cv::RANSAC, 4.0);
