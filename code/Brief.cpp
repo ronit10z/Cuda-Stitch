@@ -9,6 +9,10 @@ using namespace cv;
 
 #define THRESHOLD 0.8
 
+void PrintBriefDescriptor(BriefPointDescriptor &descript) {
+  printf("%lu %lu %lu %lu\n", descript.desc_array[0], descript.desc_array[1], 
+  descript.desc_array[2], descript.desc_array[3]);
+}
 // sets the bit corresponding to the index to val.
 static inline void BriefSet(int index, bool val, BriefPointDescriptor &descriptor) {
   if (index < 0 || index > 255) 
@@ -22,16 +26,14 @@ static inline void BriefSet(int index, bool val, BriefPointDescriptor &descripto
     int idx = index / 64; //idx is the element we need to be inside
     int offset = index % 64; //offset is the position inside of the element
 
-    int mask = 1L << offset;
+    long mask = 1L << offset;
     descriptor.desc_array[idx] |= mask;
   }
+  // PrintBriefDescriptor(descriptor);
+
 }
 
 //spit out the descriptor in bit form on cout for debugging if needed
-void PrintBriefDescriptor(BriefPointDescriptor &descript) {
-  printf("%lu %lu %lu %lu\n", descript.desc_array[0], descript.desc_array[1], 
-  descript.desc_array[2], descript.desc_array[3]);
-}
 
 // Just save all the arguements.
 Brief::Brief(FourTupleVector &briefPairs,int patchSize):
@@ -146,14 +148,14 @@ void Brief::ComputeBriefDescriptor(const cv::Mat &img, std::vector<Point> &ipts,
         float pixel2 = patch[y2][x2];
 
         // printf("(%d, %d) = %f | (%d, %d) = %f\n", x1, y1, pixel1, x2, y2, pixel2);
-        printf("%d %d\n", idx, pixel1 < pixel2);
+        // printf("%d %d\n", idx, pixel1 < pixel2);
         BriefSet(idx, pixel1 < pixel2, desiciptorVector[j]);
       }
-      printf("row = %d  col = %d ", row, col);
-      PrintBriefDescriptor(desiciptorVector[j]);
+      // printf("row = %d  col = %d ", row, col);
+      // PrintBriefDescriptor(desiciptorVector[j]);
       j++;
     }
-    exit(1);
+    // exit(1);
   }
   desiciptorVector.resize(j);
 }
