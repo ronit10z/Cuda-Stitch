@@ -13,8 +13,8 @@
 struct BriefPointDescriptor
 {
 	uint64_t desc_array[4];
-	float row;
-	float col;
+	int row;
+	int col;
 
 	BriefPointDescriptor() {
 		desc_array[0] = 0;
@@ -40,7 +40,8 @@ public:
 	Brief(FourTupleVector &briefPairs,int patchSize);
 	~Brief();
 	int ReadFile(const char* filename);
-	void ComputeBriefDescriptor(const cv::Mat &img, std::vector<InterestPoint> &ipts, std::vector<BriefPointDescriptor> &desiciptorVector);
+	void ComputeBriefDescriptor(const cv::Mat &img, std::vector<cv::Point> &ipts, std::vector<BriefPointDescriptor> &desiciptorVector);
+	
 
 	int patchSize;
 	int patchWidth;
@@ -48,8 +49,9 @@ public:
 	FourTupleVector &briefPairs;
 	
 private:
-	bool isValidPoint(const InterestPoint &ipt, float width, float height);
-	void ComputeSingleBriefDescriptor(const cv::Mat &greyImage, const InterestPoint &ipt, BriefPointDescriptor &descriptor);
+	bool isValidPoint(const cv::Point &ipt, int width, int height);
+	void ComputeSingleBriefDescriptor(const cv::Mat &greyImage, const cv::Point &ipt, BriefPointDescriptor &descriptor);
+	
 	
 };
 

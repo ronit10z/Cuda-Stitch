@@ -1,5 +1,6 @@
 #include <fstream>
 #include <climits>
+#include <cmath>
 
 #include "Brief.hpp"
 
@@ -28,8 +29,8 @@ static inline void BriefSet(int index, bool val, BriefPointDescriptor &descripto
 
 //spit out the descriptor in bit form on cout for debugging if needed
 void PrintBriefDescriptor(BriefPointDescriptor &descript) {
-  std::cout << std::bitset<64>(descript.desc_array[3]) << std::bitset<64>(descript.desc_array[2])
-    << std::bitset<64>(descript.desc_array[1]) << std::bitset<64>(descript.desc_array[0]) << "\n";
+  printf("%lu %lu %lu %lu\n", descript.desc_array[0], descript.desc_array[1], 
+  descript.desc_array[2], descript.desc_array[3]);
 }
 
 // Just save all the arguements.
@@ -64,6 +65,9 @@ int Brief::ReadFile(const char* filename)
   	int x1, y1, x2, y2;
   	for (int i = 0; i < this->numBriefPairs; i++) {
   		infile >> x1 >> y1 >> x2 >> y2;
+
+      // cout << x1 << " " << y1 << " "  << x2 << " " << y2;
+      // exit(1);
   		
       this->briefPairs[i].x1 = x1;
       this->briefPairs[i].y1 = y1;
@@ -75,47 +79,95 @@ int Brief::ReadFile(const char* filename)
   return this->numBriefPairs;
 }
 
-//Determine if the point is within bounds
-bool Brief::isValidPoint(const InterestPoint &ipt, float width, float height)
+inline bool isInBound(int r, int c, int h, int w) 
 {
-  float col = ipt.position.first;
-  float row = ipt.position.second;
-  float dist = static_cast<float>(this->patchWidth);
-
-  return (row - dist >= 0 && col - dist >= 0 && row + dist <= height && col + dist <= width);
+  return r >= 0 && r < h && c >= 0 && c < w;
 }
 
+// bool hasValidPatch(int h, int w, int row, int col) 
+// {
+//   int r = PATCH_SIZE / 2;
+//   return isInBound(row - r, col - r, h, w) && isInBound(row + r, col + r,h,w);
+// }
+
+//Determine if the point is within bounds
+bool Brief::isValidPoint(const Point &ipt, int width, int height)
+{
+  int col = (ipt.x);
+  int row = (ipt.y);
+  int dist = (this->patchWidth);
+
+  return isInBound(row - dist, col - dist, height, width) && isInBound(row + dist, col + dist,height,width); 
+}
+
+
+
 // loops over all the points and calculates the descripter if the point is within bounds.
-void Brief::ComputeBriefDescriptor(const cv::Mat &img, std::vector<InterestPoint> &ipts, std::vector<BriefPointDescriptor> &desiciptorVector)
+void Brief::ComputeBriefDescriptor(const cv::Mat &img, std::vector<Point> &ipts, std::vector<BriefPointDescriptor> &desiciptorVector)
 { 
   desiciptorVector.resize(ipts.size());
   int j = 0;
-  float width = static_cast<float>(img.cols);
-  float height = static_cast<float>(img .rows);
+  int width = (img.cols);
+  int height = (img .rows);
+  Mat blurredIm;
+  Mat temp = img / 255.0;
+  cv::GaussianBlur(temp, blurredIm, Size(5, 5), 1/sqrt(2), 1/sqrt(2));
 
-  for (uint32_t i = 0; i < ipts.size(); i++)
+  for (uint32_t k = 0; k < ipts.size(); k++)
   {
-    InterestPoint &ipoint = ipts[i];
+    Point &ipoint = ipts[k];
+    int col = ipoint.x;
+    int row = ipoint.y;
 
+    float patch[9][9];
     if (isValidPoint(ipoint, width, height))
     {
-      ComputeSingleBriefDescriptor(img, ipoint, desiciptorVector[j]);
+      // printf("initial =   %d %d\n", row, col);
+      for (int i = 0; i < patchSize; ++i)
+      {
+        for (int j = 0; j < patchSize; ++j)
+        {
+          // printf("%d %d (%d %d) =  %f\n", i, j, row + i - patchSize/2, col + j - patchSize/2, blurredIm.at<float>(row + i - patchSize/2, col + j - patchSize/2));
+          patch[i][j] = blurredIm.at<float>(row + i - patchSize/2, col + j - patchSize/2);
+        }
+      }
+
+      desiciptorVector[j].col = col;
+      desiciptorVector[j].row = row;
+
+      for (int idx = 0; idx < this->numBriefPairs; idx++)
+      {
+        int x1 = briefPairs[idx].x1;
+        int y1 = briefPairs[idx].y1;
+        int x2 = briefPairs[idx].x2;
+        int y2 = briefPairs[idx].y2;
+
+        float pixel1 = patch[y1][x1];
+        float pixel2 = patch[y2][x2];
+
+        // printf("(%d, %d) = %f | (%d, %d) = %f\n", x1, y1, pixel1, x2, y2, pixel2);
+        printf("%d %d\n", idx, pixel1 < pixel2);
+        BriefSet(idx, pixel1 < pixel2, desiciptorVector[j]);
+      }
+      printf("row = %d  col = %d ", row, col);
+      PrintBriefDescriptor(desiciptorVector[j]);
       j++;
     }
+    exit(1);
   }
   desiciptorVector.resize(j);
 }
 
 
 // Calulates the descipter for a given point
-void Brief::ComputeSingleBriefDescriptor(const cv::Mat &greyImage, const InterestPoint &ipt, BriefPointDescriptor &descriptor)
+void Brief::ComputeSingleBriefDescriptor(const cv::Mat &greyImage, const Point &ipt, BriefPointDescriptor &descriptor)
 {
   // position is (x, y)
-  int c = ipt.position.first;
-  int r = ipt.position.second;
+  int c = ipt.x;
+  int r = ipt.y;
 
-  descriptor.col = ipt.position.first;
-  descriptor.row = ipt.position.second;
+  descriptor.col = ipt.x;
+  descriptor.row = ipt.y;
 
   for (int idx = 0; idx < this->numBriefPairs; idx++)
   {
@@ -186,7 +238,7 @@ void FindMatches(vector<BriefPointDescriptor> &descripts1,
     {
       // printf("Match !\n");
       points1.push_back(Point(descripts1[i].col, descripts1[i].row));
-      points2.push_back(Point(descripts1[bestj].col, descripts1[bestj].row));
+      points2.push_back(Point(descripts2[bestj].col, descripts2[bestj].row));
     }
   }
 }
