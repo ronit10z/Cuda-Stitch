@@ -29,7 +29,7 @@ static inline void BriefSet(int index, bool val, BriefPointDescriptor &descripto
     long mask = 1L << offset;
     descriptor.desc_array[idx] |= mask;
   }
-  if (k == 119) PrintBriefDescriptor(descriptor);
+  // if (k == 119) PrintBriefDescriptor(descriptor);
 
 }
 
@@ -148,7 +148,7 @@ void Brief::ComputeBriefDescriptor(const cv::Mat &img, std::vector<Point> &ipts,
         float pixel1 = patch[y1][x1];
         float pixel2 = patch[y2][x2];
 
-        if (k == 119) printf("(%d, %d) = %f | (%d, %d) = %f\n", x1, y1, pixel1, x2, y2, pixel2);
+        // if (k == 119) printf("(%d, %d) = %f | (%d, %d) = %f\n", x1, y1, pixel1, x2, y2, pixel2);
         // if (k == 119) printf("%d %d ", idx, pixel1 < pixel2);
         BriefSet(idx, pixel1 < pixel2, desiciptorVector[j], k);
       }
