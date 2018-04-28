@@ -30,10 +30,10 @@ extern TimeAccumulator timeAccumulator;
 
 static inline void GenerateIntegralImage(const Mat &source, Mat &integralImage_1);
 void drawIpoints(Mat img_1, vector<InterestPoint> &ipts);
-static inline void GetPanSize(double &xMin, double &xMax, double &yMin, double &yMax, Mat &img, Mat &homographyMat);
-Mat getTranslationMatrix(float x, float y);
-void stitch(int height, int width, Mat &img_1, Mat &img_2, 
-  Mat &homographyMat_1, Mat &homographyMat_2);
+// static inline void GetPanSize(double &xMin, double &xMax, double &yMin, double &yMax, Mat &img, Mat &homographyMat);
+// Mat getTranslationMatrix(float x, float y);
+// void stitch(int height, int width, Mat &img_1, Mat &img_2, 
+//   Mat &homographyMat_1, Mat &homographyMat_2);
 
 
 static inline int CountOnes(uint64_t num)
@@ -54,6 +54,71 @@ void printBriefDescriptor(BriefPointDescriptor &descript) {
     << std::bitset<64>(descript.desc_array[1]) << std::bitset<64>(descript.desc_array[0]) << "\n";
 }
 
+Mat createMask(Mat& im) {
+    Mat mask = Mat::ones(im.size(), CV_8UC1);
+    mask.row(0).setTo(0);
+    mask.row(mask.rows-1).setTo(0);
+    mask.col(0).setTo(0);
+    mask.col(mask.cols-1).setTo(0);
+    distanceTransform(mask, mask, CV_DIST_L2, 3);
+    double min, max;
+    minMaxLoc(im, &min, &max);
+    mask /= max;
+
+    std::vector<Mat> singleChannels;
+    singleChannels.push_back(mask);
+    singleChannels.push_back(mask);
+    singleChannels.push_back(mask);
+    merge(singleChannels, mask);
+
+    return mask;
+}
+
+std::vector<Point2d> getWarpCorners(Mat& im, Mat& H) {
+    std::vector<Point2d> im_corners, im_corners_warped;
+    im_corners.reserve(4);
+
+    // corners before warping
+    int h = im.rows;
+    int w = im.cols;
+    im_corners.push_back(Point2d(0,0));
+    im_corners.push_back(Point2d(w,0));
+    im_corners.push_back(Point2d(0,h));
+    im_corners.push_back(Point2d(w,h));
+
+    perspectiveTransform(im_corners, im_corners_warped, H);
+
+    return im_corners_warped;
+}
+
+Mat getTranslationMatrix(float x, float y) {
+    Mat M = Mat::eye(3, 3, CV_32F);
+    M.at<float>(0,2) = x;
+    M.at<float>(1,2) = y;
+    return M;
+}
+
+Mat stitchImages(Mat& pano, Mat& image, Mat& H, Mat& pano_mask, Mat& img_mask) 
+{
+  int width = pano.cols;
+  int height = pano.rows;
+
+  Mat image_warped;
+  image_warped.create(image.size(), image.type());
+
+  warpPerspective(image, image_warped, H, Size(width, height));
+
+  Mat bim1, bim2;
+  img_mask.convertTo(img_mask, image_warped.type());
+  multiply(pano, pano_mask, bim1);
+  multiply(image_warped, img_mask, bim2);
+
+  Mat stitch_img;
+  divide(bim1 + bim2, pano_mask + img_mask, stitch_img);
+  return stitch_img;
+}
+
+
 int main(int argc, char const *argv[])
 {
   // TODO: change filename to command line arguement, have assert or 
@@ -66,9 +131,6 @@ int main(int argc, char const *argv[])
   Mat img_1, img_2;
   img1.convertTo(img_1, CV_32F);
   img2.convertTo(img_2, CV_32F);
-
-
-
 
   int minHessian = 400;
   Ptr<SURF> detector = SURF::create( minHessian );
@@ -113,142 +175,69 @@ int main(int argc, char const *argv[])
   vector<cv::Point>points_2;
   FindMatches(desiciptorVector1, desiciptorVector2, points_1, points_2);
 
-  // for (uint32_t i = 0; i < points_2.size(); ++i)
-  // {
-  //   printf("%d %d\n", points_2[i].x, points_2[i].y);
-  // }
+  Mat imcolor1 = imread("../../images/bryce_left_02.png", IMREAD_COLOR);
+  Mat imcolor2 = imread("../../images/bryce_right_02.png", IMREAD_COLOR);
+  imcolor1.convertTo(imcolor1, CV_32FC3);
+  imcolor1 /= 255.0;
+
+  imcolor2.convertTo(imcolor2, CV_32FC3);
+  imcolor2 /= 255.0;
 
 
-  // exit(1);
-
-  Mat homographyMat_1 = (Mat::eye(3, 3, CV_32F));
-  Mat homographyMat_2 = cv::findHomography(points_2, points_1, cv::RANSAC, 4.0);
+  Mat homographyMat_1 = Mat::eye(3, 3, CV_32F);
+  Mat homographyMat_2 = (cv::findHomography(points_2, points_1, RANSAC, 4.0));
   homographyMat_2.convertTo(homographyMat_2, CV_32F);
-  
-  double xMin, yMin = INT_MAX;
-  double xMax, yMax = 0;
-  GetPanSize(xMin, xMax, yMin, yMax, img_1, homographyMat_1);
-  GetPanSize(xMin, xMax, yMin, yMax, img_2, homographyMat_2);
 
+  double xMin = INT_MAX; 
+  double yMin = INT_MAX;
+  double xMax = 0;
+  double yMax = 0;
+
+  std::vector<Point2d> corners = getWarpCorners(imcolor1, homographyMat_1);
+  for (uint32_t j = 0; j < corners.size(); j++) 
+  {
+    xMin = std::min(xMin, corners[j].x);
+    xMax = std::max(xMax, corners[j].x);
+    yMin = std::min(yMin, corners[j].y);
+    yMax = std::max(yMax, corners[j].y);
+  }
+
+  corners = getWarpCorners(imcolor2, homographyMat_2);
+  for (uint32_t j = 0; j < corners.size(); j++) 
+  {
+    xMin = std::min(xMin, corners[j].x);
+    xMax = std::max(xMax, corners[j].x);
+    yMin = std::min(yMin, corners[j].y);
+    yMax = std::max(yMax, corners[j].y);
+  }
+
+  // shift the panorama if warped images are out of boundaries
   double shiftX = -xMin;
   double shiftY = -yMin;
   Mat transM = getTranslationMatrix(shiftX, shiftY);
-
-  // initialize empty panorama
+  int width = std::round(xMax - xMin);
+  int height = std::round(yMax - yMin);
 
   homographyMat_1 = (transM * homographyMat_1) / homographyMat_1.at<float>(1, 1);
   homographyMat_2 = (transM * homographyMat_2) / homographyMat_2.at<float>(1, 1);
 
-  int width = std::round(xMax - xMin);
-  int height = std::round(yMax - yMin);
-  Mat imcolor1 = imread("../../images/bryce_left_02.png", IMREAD_COLOR);
-  Mat imcolor2 = imread("../../images/bryce_right_02.png", IMREAD_COLOR);
+  Mat panorama = Mat::zeros(height, width, imcolor1.type());
+  Mat pano_mask = Mat::zeros(height, width, imcolor1.type());
 
-  stitch(height, width, imcolor1, imcolor2, homographyMat_1, homographyMat_2);
+  Mat img_mask1 = createMask(imcolor1);
+  cv::warpPerspective(img_mask1, img_mask1, homographyMat_1, Size(width, height));
+  panorama = stitchImages(panorama, imcolor1, homographyMat_1, pano_mask, img_mask1);
+
+  pano_mask = pano_mask + img_mask1;
+
+  Mat img_mask2 = createMask(imcolor2);
+  cv::warpPerspective(img_mask2, img_mask2, homographyMat_2, Size(width, height));
+  panorama = stitchImages(panorama, imcolor2, homographyMat_2, pano_mask, img_mask2);
+
+  imshow("pano", panorama);
+  waitKey(0);
 
   return 0;
-}
-
-Mat createMask(Mat& im) 
-{
-  Mat mask = Mat::ones(im.size(), CV_8UC1);
-  mask.row(0).setTo(0);
-  mask.row(mask.rows-1).setTo(0);
-  mask.col(0).setTo(0);
-  mask.col(mask.cols-1).setTo(0);
-  distanceTransform(mask, mask, CV_DIST_L2, 3);
-  double min, max;
-  minMaxLoc(im, &min, &max);
-  mask /= max;
-
-  std::vector<Mat> singleChannels;
-  singleChannels.push_back(mask);
-  singleChannels.push_back(mask);
-  singleChannels.push_back(mask);
-  merge(singleChannels, mask);
-
-  return mask;
-}
-
-Mat stitchImages(Mat& pano, Mat& image, Mat& H, Mat& pano_mask, Mat& img_mask) 
-{
-  int width = pano.cols;
-  int height = pano.rows;
-
-  Mat image_warped;
-  image_warped.create(image.size(), image.type());
-
-  warpPerspective(image, image_warped, H, Size(width, height));
-
-  Mat bim1, bim2;
-  img_mask.convertTo(img_mask, image_warped.type());
-  multiply(pano, pano_mask, bim1);
-  multiply(image_warped, img_mask, bim2);
-
-  Mat stitch_img;
-  divide(bim1 + bim2, pano_mask + img_mask, stitch_img);
-  return stitch_img;
-}
-
-void stitch(int height, int width, Mat &img_1, Mat &img_2, 
-  Mat &homographyMat_1, Mat &homographyMat_2)
-{
-  Mat panorama = Mat::zeros(height, width, img_1.type());
-  panorama /= 255;
-  Mat pano_mask = Mat::zeros(height, width, img_1.type());
-
-  Mat imgMask_1 = createMask(img_1);
-  cv::warpPerspective(imgMask_1, imgMask_1, homographyMat_1, Size(width, height));
-  // BUG ON NEXT LINE
-  panorama = stitchImages(panorama, img_1, homographyMat_1, pano_mask, imgMask_1);
-  pano_mask += imgMask_1;
-
-  Mat imgMask_2 = createMask(img_2);
-  cv::warpPerspective(imgMask_2, imgMask_2, homographyMat_2, Size(width, height));
-  panorama = stitchImages(panorama, img_2, homographyMat_2, pano_mask, imgMask_2);
-
-  imshow("Panorama", panorama);
-
-  waitKey(0);
-}
-
-
-cv::Mat getTranslationMatrix(float x, float y) 
-{
-    Mat M = Mat::eye(3, 3, CV_32F);
-    M.at<float>(0,2) = x;
-    M.at<float>(1,2) = y;
-    return M;
-}
-
-std::vector<Point2d> getWarpCorners(Mat& im, Mat& H) 
-{
-  std::vector<Point2d> im_corners, im_corners_warped;
-  im_corners.reserve(4);
-
-  // corners before warping
-  int h = im.rows;
-  int w = im.cols;
-  im_corners.push_back(Point2d(0,0));
-  im_corners.push_back(Point2d(w,0));
-  im_corners.push_back(Point2d(0,h));
-  im_corners.push_back(Point2d(w,h));
-
-  perspectiveTransform(im_corners, im_corners_warped, H);
-
-  return im_corners_warped;
-}
-
-static inline void GetPanSize(double &xMin, double &xMax, double &yMin, double &yMax, Mat &img, Mat &homographyMat)
-{
-  std::vector<Point2d> corners = getWarpCorners(img, homographyMat);
-  for (uint32_t i = 0; i < corners.size(); i++) 
-  {
-    xMin = std::min(xMin, corners[i].x);
-    xMax = std::max(xMax, corners[i].x);
-    yMin = std::min(yMin, corners[i].y);
-    yMax = std::max(yMax, corners[i].y);
-  }
 }
 
 
