@@ -32,7 +32,7 @@ inline float BoxIntegral(Mat img, int row, int col, int rows, int cols)
 //-------------------------------------------------------
 
 //! Constructor with image
-FastHessian::FastHessian(Mat img, std::vector<InterestPoint> &ipts, 
+FastHessian::FastHessian(Mat img, std::vector<cv::Point> &ipts, 
                          const int octaves, const int intervals, const int init_sample, 
                          const float thresh) 
                          : ipts(ipts)
@@ -259,11 +259,9 @@ void FastHessian::interpolateExtremum(int r, int c, ResponseLayer *t, ResponseLa
   // If point is sufficiently close to the actual extremum
   if( fabs( xi ) < 0.5f  &&  fabs( xr ) < 0.5f  &&  fabs( xc ) < 0.5f )
   {
-    InterestPoint ipt;
-    ipt.position.first = static_cast<float>((c + xc) * t->step);
-    ipt.position.second = static_cast<float>((r + xr) * t->step);
-    ipt.scale = static_cast<float>((0.1333f) * (m->filter + xi * filterStep));
-    ipt.laplaceValue = static_cast<int>(m->getLaplacian(r,c,t));
+    Point ipt;
+    ipt.x = static_cast<float>((c + xc) * t->step);
+    ipt.y = static_cast<float>((r + xr) * t->step);
     ipts.push_back(ipt);
   }
 }

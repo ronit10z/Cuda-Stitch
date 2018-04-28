@@ -124,57 +124,64 @@ int main(int argc, char const *argv[])
   // TODO: change filename to command line arguement, have assert or 
   // exit if argc is not enough.
   const char* fileName = "../../../../ParaPano/data/testPattern.txt";
-  Mat img1 = imread("../../images/bryce_left_02.png", IMREAD_GRAYSCALE);
-  Mat img2 = imread("../../images/bryce_right_02.png", IMREAD_GRAYSCALE);
-  // img_1.convertTo(img_1, CV_32F);
-  // img_2.convertTo(img_2, CV_32F);
-  Mat img_1, img_2;
-  img1.convertTo(img_1, CV_32F);
-  img2.convertTo(img_2, CV_32F);
 
-  int minHessian = 400;
-  Ptr<SURF> detector = SURF::create( minHessian );
-  std::vector<KeyPoint> keypoints_1, keypoints_2;
-  detector->detect( img1, keypoints_1 );
-  detector->detect( img2, keypoints_2 );
+
+  // Declare Ipoints and other stuff
+  SetupTimer(&timeAccumulator);
+  StartTimer(&timeAccumulator, TOTAL_TIME);
+
+  // // Open image and conver to grey scale
+  StartTimer(&timeAccumulator, IMAGE_CONVERSION);
+  Mat img_1 = imread("../../images/bryce_left_02.png");
+  Mat gray8_1(img_1.size(), CV_8U, 1);
+  Mat gray32_1(img_1.size(), CV_32F, 1);
+  cvtColor(img_1, gray8_1, CV_BGR2GRAY);
+  gray8_1.convertTo(gray32_1, CV_32F, 1.0/255.0, 0);
+
+  Mat img_2 = imread("../../images/bryce_right_02.png");
+  Mat gray8_2(img_2.size(), CV_8U, 1);
+  Mat gray32_2(img_2.size(), CV_32F, 1);
+  cvtColor(img_2, gray8_2, CV_BGR2GRAY);
+  gray8_2.convertTo(gray32_2, CV_32F, 1.0/255.0, 0);
+
+  EndTimer(&timeAccumulator, IMAGE_CONVERSION);
+
+  // // Compute Summed table representation of image
+  StartTimer(&timeAccumulator, SUMMED_TABLE);
+  Mat integralImage_1(img_1.size(), CV_32F, 1);
+  GenerateIntegralImage(gray32_1, integralImage_1);
+
+  Mat integralImage_2(img_2.size(), CV_32F, 1);
+  GenerateIntegralImage(gray32_2, integralImage_2);
+  EndTimer(&timeAccumulator, SUMMED_TABLE);
+
+  // Compute Interest Points from summed table representation
   std::vector<Point> interestPoints1;
-  std::vector<Point> interestPoints2;
-  for (uint32_t i = 0; i < keypoints_1.size(); ++i)
-  {
-    interestPoints1.push_back(Point(keypoints_1[i].pt.x, keypoints_1[i].pt.y));
-  }
-  for (uint32_t i = 0; i < keypoints_2.size(); ++i)
-  {
-    interestPoints2.push_back(Point(keypoints_2[i].pt.x, keypoints_2[i].pt.y));
-  }
+  FastHessian fh_1(integralImage_1, interestPoints1, 5, 4, 2, 0.00004f);
+  fh_1.getIpoints();
 
-  // Compute Brief Descriptor based off interest points
+  std::vector<Point> interestPoints2;
+  FastHessian fh_2(integralImage_2, interestPoints2, 5, 4, 2, 0.00004f);
+  fh_2.getIpoints();
+
+
+  // Compute Brief Descriptor based off interest points, images are greyscale, CV_32F
   FourTupleVector fourTuplevector;
   Brief briefDescriptor(fourTuplevector, PATCH_SIZE);
   briefDescriptor.ReadFile(fileName);
-  // end of setup for brief desciptor, need to feed in new image only, if you want to do
-  // it for another image, the parsing is expensive but only happens once per run.
-
   vector<BriefPointDescriptor> desiciptorVector1;
-  briefDescriptor.ComputeBriefDescriptor(img_1, interestPoints1, desiciptorVector1);
+  briefDescriptor.ComputeBriefDescriptor(gray32_1, interestPoints1, desiciptorVector1);
   vector<BriefPointDescriptor> desiciptorVector2;
-  briefDescriptor.ComputeBriefDescriptor(img_2, interestPoints2, desiciptorVector2);
-  // get both desciptors
-  // printf("Number of Interest Points Detected in im1 = %u\n", (uint32_t)interestPoints1.size());
-  // printf("descriptVector1 length = %lu\n", desiciptorVector1.size());
-  // printf("descriptVector2 length = %lu\n", desiciptorVector2.size());
+  briefDescriptor.ComputeBriefDescriptor(gray32_2, interestPoints2, desiciptorVector2);
 
-  // for (uint32_t i = 0; i < desiciptorVector1.size(); ++i)
-  // {
-  //   printf("%lu %lu %lu %lu\n", desiciptorVector1[i].desc_array[0], desiciptorVector1[i].desc_array[1], 
-  //     desiciptorVector1[i].desc_array[2], desiciptorVector1[i].desc_array[3]);
-  // }
-  // exit(1);
-
+  // Match Interest Points
   vector<cv::Point>points_1;
   vector<cv::Point>points_2;
   FindMatches(desiciptorVector1, desiciptorVector2, points_1, points_2);
+  // printf("interespoints = %lu %lu\n", interestPoints1.size(), interestPoints2.size());
+  // printf("Matched points - %lu, %lu\n", points_1.size(), points_2.size());
 
+// // OPENCV ROUTINES TO STITCH CODE, CREATE SEPARATE FUNCTION
   Mat imcolor1 = imread("../../images/bryce_left_02.png", IMREAD_COLOR);
   Mat imcolor2 = imread("../../images/bryce_right_02.png", IMREAD_COLOR);
   imcolor1.convertTo(imcolor1, CV_32FC3);

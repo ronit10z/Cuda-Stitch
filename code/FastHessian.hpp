@@ -21,51 +21,51 @@ class FastHessian {
   
   public:
    
-    FastHessian(Mat img, 
-                std::vector<InterestPoint> &ipts, 
-                const int octaves, 
-                const int intervals, 
-                const int init_sample, 
-                const float thres);
+	FastHessian(Mat img, 
+				std::vector<cv::Point> &ipts, 
+				const int octaves, 
+				const int intervals, 
+				const int init_sample, 
+				const float thres);
 
-    ~FastHessian();
+	~FastHessian();
 
-    void getIpoints();
-    
+	void getIpoints();
+	
   private:
 
-    //---------------- Private Functions -----------------//
+	//---------------- Private Functions -----------------//
 
-    //! Build map of DoH responses
-    void buildResponseMap();
+	//! Build map of DoH responses
+	void buildResponseMap();
 
-    //! Calculate DoH responses for supplied layer
-    void buildResponseLayer(ResponseLayer *r);
+	//! Calculate DoH responses for supplied layer
+	void buildResponseLayer(ResponseLayer *r);
 
-    //! 3x3x3 Extrema test
-    int isExtremum(int r, int c, ResponseLayer *t, ResponseLayer *m, ResponseLayer *b);    
-    
-    //! Interpolation functions - adapted from Lowe's SIFT implementation
-    void interpolateExtremum(int r, int c, ResponseLayer *t, ResponseLayer *m, ResponseLayer *b);
-    void interpolateStep(int r, int c, ResponseLayer *t, ResponseLayer *m, ResponseLayer *b,
-                          double* xi, double* xr, double* xc );
-    CvMat* deriv3D(int r, int c, ResponseLayer *t, ResponseLayer *m, ResponseLayer *b);
-    CvMat* hessian3D(int r, int c, ResponseLayer *t, ResponseLayer *m, ResponseLayer *b);
+	//! 3x3x3 Extrema test
+	int isExtremum(int r, int c, ResponseLayer *t, ResponseLayer *m, ResponseLayer *b);    
+	
+	//! Interpolation functions - adapted from Lowe's SIFT implementation
+	void interpolateExtremum(int r, int c, ResponseLayer *t, ResponseLayer *m, ResponseLayer *b);
+	void interpolateStep(int r, int c, ResponseLayer *t, ResponseLayer *m, ResponseLayer *b,
+						  double* xi, double* xr, double* xc );
+	CvMat* deriv3D(int r, int c, ResponseLayer *t, ResponseLayer *m, ResponseLayer *b);
+	CvMat* hessian3D(int r, int c, ResponseLayer *t, ResponseLayer *m, ResponseLayer *b);
 
-    //---------------- Private Variables -----------------//
+	//---------------- Private Variables -----------------//
 
-    Mat img;
-    int i_width, i_height;
+	Mat img;
+	int i_width, i_height;
 
-    std::vector<InterestPoint> &ipts;
+	std::vector<cv::Point> &ipts;
 
-    std::vector<ResponseLayer *> responseMap;
+	std::vector<ResponseLayer *> responseMap;
 
-    int octaves;
+	int octaves;
 
-    int intervals;
+	int intervals;
 
-    int init_sample;
+	int init_sample;
 
-    float thresh;
+	float thresh;
 };

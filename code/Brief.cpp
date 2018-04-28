@@ -125,12 +125,10 @@ void Brief::ComputeBriefDescriptor(const cv::Mat &img, std::vector<Point> &ipts,
     float patch[9][9];
     if (isValidPoint(ipoint, width, height))
     {
-      // printf("initial =   %d %d\n", row, col);
       for (int i = 0; i < patchSize; ++i)
       {
         for (int j = 0; j < patchSize; ++j)
         {
-          // printf("%d %d (%d %d) =  %f\n", i, j, row + i - patchSize/2, col + j - patchSize/2, blurredIm.at<float>(row + i - patchSize/2, col + j - patchSize/2));
           patch[i][j] = blurredIm.at<float>(row + i - patchSize/2, col + j - patchSize/2);
         }
       }
@@ -148,15 +146,10 @@ void Brief::ComputeBriefDescriptor(const cv::Mat &img, std::vector<Point> &ipts,
         float pixel1 = patch[y1][x1];
         float pixel2 = patch[y2][x2];
 
-        // if (k == 119) printf("(%d, %d) = %f | (%d, %d) = %f\n", x1, y1, pixel1, x2, y2, pixel2);
-        // if (k == 119) printf("%d %d ", idx, pixel1 < pixel2);
         BriefSet(idx, pixel1 < pixel2, desiciptorVector[j], k);
       }
-      // printf("row = %d  col = %d ", row, col);
-      // PrintBriefDescriptor(desiciptorVector[j]);
       j++;
     }
-    // exit(1);
   }
   desiciptorVector.resize(j);
 }
