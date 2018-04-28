@@ -1,11 +1,12 @@
 #ifndef CYCLETIMER_H
 
 #define TIMER_DEBUG
-#define NUM_ACTIVITIES 5
+#define NUM_ACTIVITIES 7
 
 #include <chrono>
 
-typedef enum {TOTAL_TIME, IMAGE_CONVERSION, SUMMED_TABLE, RESPONSES, NMS} Activity;
+typedef enum {TOTAL_TIME, IMAGE_IO, SUMMED_TABLE, INTEREST_POINT_DETECTION, 
+	DESCRIPTOR_EXTRACTION, DESCRIPTOR_MATCHING, OPENCV_ROUTINES} Activity;
 typedef std::chrono::_V2::system_clock::time_point TIME;
 
 

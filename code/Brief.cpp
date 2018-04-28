@@ -111,7 +111,7 @@ void Brief::ComputeBriefDescriptor(const cv::Mat &img, std::vector<Point> &ipts,
   desiciptorVector.resize(ipts.size());
   int j = 0;
   int width = (img.cols);
-  int height = (img .rows);
+  int height = (img.rows);
   Mat blurredIm;
   Mat temp = img / 255.0;
   cv::GaussianBlur(temp, blurredIm, Size(5, 5), 1/sqrt(2), 1/sqrt(2));
@@ -122,29 +122,30 @@ void Brief::ComputeBriefDescriptor(const cv::Mat &img, std::vector<Point> &ipts,
     int col = ipoint.x;
     int row = ipoint.y;
 
-    float patch[9][9];
+    // float patch[9][9];
     if (isValidPoint(ipoint, width, height))
     {
-      for (int i = 0; i < patchSize; ++i)
-      {
-        for (int j = 0; j < patchSize; ++j)
-        {
-          patch[i][j] = blurredIm.at<float>(row + i - patchSize/2, col + j - patchSize/2);
-        }
-      }
+      // for (int i = 0; i < patchSize; ++i)
+      // {
+      //   for (int j = 0; j < patchSize; ++j)
+      //   {
+      //     patch[i][j] = blurredIm.at<float>(row + i - patchSize/2, col + j - patchSize/2);
+      //   }
+      // }
+      // TODO: WHY IS THE RUM ALWAYS GONE, why is patch faster?
 
       desiciptorVector[j].col = col;
       desiciptorVector[j].row = row;
 
       for (int idx = 0; idx < this->numBriefPairs; idx++)
       {
-        int x1 = briefPairs[idx].x1;
-        int y1 = briefPairs[idx].y1;
-        int x2 = briefPairs[idx].x2;
-        int y2 = briefPairs[idx].y2;
+        int x1 = briefPairs[idx].x1 + col;
+        int y1 = briefPairs[idx].y1 + row;
+        int x2 = briefPairs[idx].x2 + col;
+        int y2 = briefPairs[idx].y2 + row;
 
-        float pixel1 = patch[y1][x1];
-        float pixel2 = patch[y2][x2];
+        float pixel1 = blurredIm.at<float>(y1, x1);
+        float pixel2 = blurredIm.at<float>(y2, x2);
 
         BriefSet(idx, pixel1 < pixel2, desiciptorVector[j], k);
       }
@@ -153,31 +154,6 @@ void Brief::ComputeBriefDescriptor(const cv::Mat &img, std::vector<Point> &ipts,
   }
   desiciptorVector.resize(j);
 }
-
-
-// Calulates the descipter for a given point
-// void Brief::ComputeSingleBriefDescriptor(const cv::Mat &greyImage, const Point &ipt, BriefPointDescriptor &descriptor)
-// {
-//   // position is (x, y)
-//   int c = ipt.x;
-//   int r = ipt.y;
-
-//   descriptor.col = ipt.x;
-//   descriptor.row = ipt.y;
-
-//   for (int idx = 0; idx < this->numBriefPairs; idx++)
-//   {
-//     int x1 = briefPairs[idx].x1;
-//     int y1 = briefPairs[idx].y1;
-//     int x2 = briefPairs[idx].x2;
-//     int y2 = briefPairs[idx].y2;
-
-//     float pixel1 = greyImage.at<float>(r + x1, c + y1);
-//     float pixel2 = greyImage.at<float>(r + x2, c + y2);
-
-//     BriefSet(idx, pixel1 < pixel2, descriptor);
-//   }
-// }
 
 static inline int CountOnes(uint64_t num)
 {

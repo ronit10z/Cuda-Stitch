@@ -25,6 +25,8 @@ extern TimeAccumulator timeAccumulator;
 
 
 #define PATCH_SIZE 9
+#define DIM 400
+#define SAMPLING_RATE 4
 
 //-------------------------------------------------------
 
@@ -123,7 +125,8 @@ int main(int argc, char const *argv[])
 {
   // TODO: change filename to command line arguement, have assert or 
   // exit if argc is not enough.
-  const char* fileName = "../../../../ParaPano/data/testPattern.txt";
+  // const char* fileName = "../../../../ParaPano/data/testPattern.txt";
+  const char* fileName = "../pointOffsets.txt";
 
 
   // Declare Ipoints and other stuff
@@ -131,23 +134,30 @@ int main(int argc, char const *argv[])
   StartTimer(&timeAccumulator, TOTAL_TIME);
 
   // // Open image and conver to grey scale
-  StartTimer(&timeAccumulator, IMAGE_CONVERSION);
-  Mat img_1 = imread("../../images/bryce_left_02.png");
+  StartTimer(&timeAccumulator, IMAGE_IO);
+  Mat img_1 = imread("../../images/mountainL.png");
+  resize(img_1, img_1, Size(DIM, DIM));
   Mat gray8_1(img_1.size(), CV_8U, 1);
   Mat gray32_1(img_1.size(), CV_32F, 1);
   cvtColor(img_1, gray8_1, CV_BGR2GRAY);
   gray8_1.convertTo(gray32_1, CV_32F, 1.0/255.0, 0);
+  img_1.convertTo(img_1, CV_32FC3);
+  img_1 /= 255.0;
 
-  Mat img_2 = imread("../../images/bryce_right_02.png");
+  Mat img_2 = imread("../../images/mountainR.png");
+  resize(img_2, img_2, Size(DIM, DIM));
   Mat gray8_2(img_2.size(), CV_8U, 1);
   Mat gray32_2(img_2.size(), CV_32F, 1);
   cvtColor(img_2, gray8_2, CV_BGR2GRAY);
   gray8_2.convertTo(gray32_2, CV_32F, 1.0/255.0, 0);
+  img_2.convertTo(img_2, CV_32FC3);
+  img_2 /= 255.0;
 
-  EndTimer(&timeAccumulator, IMAGE_CONVERSION);
+  EndTimer(&timeAccumulator, IMAGE_IO);
 
   // // Compute Summed table representation of image
   StartTimer(&timeAccumulator, SUMMED_TABLE);
+
   Mat integralImage_1(img_1.size(), CV_32F, 1);
   GenerateIntegralImage(gray32_1, integralImage_1);
 
@@ -156,15 +166,20 @@ int main(int argc, char const *argv[])
   EndTimer(&timeAccumulator, SUMMED_TABLE);
 
   // Compute Interest Points from summed table representation
+  StartTimer(&timeAccumulator, INTEREST_POINT_DETECTION);
+
   std::vector<Point> interestPoints1;
-  FastHessian fh_1(integralImage_1, interestPoints1, 5, 4, 2, 0.00004f);
+  FastHessian fh_1(integralImage_1, interestPoints1, 5, 4, SAMPLING_RATE, 0.00004f);
   fh_1.getIpoints();
 
   std::vector<Point> interestPoints2;
-  FastHessian fh_2(integralImage_2, interestPoints2, 5, 4, 2, 0.00004f);
+  FastHessian fh_2(integralImage_2, interestPoints2, 5, 4, SAMPLING_RATE, 0.00004f);
   fh_2.getIpoints();
+  EndTimer(&timeAccumulator, INTEREST_POINT_DETECTION);
+  printf("Num interest points = %lu, %lu\n", interestPoints1.size(), interestPoints2.size());
 
 
+  StartTimer(&timeAccumulator, DESCRIPTOR_EXTRACTION);
   // Compute Brief Descriptor based off interest points, images are greyscale, CV_32F
   FourTupleVector fourTuplevector;
   Brief briefDescriptor(fourTuplevector, PATCH_SIZE);
@@ -174,22 +189,20 @@ int main(int argc, char const *argv[])
   vector<BriefPointDescriptor> desiciptorVector2;
   briefDescriptor.ComputeBriefDescriptor(gray32_2, interestPoints2, desiciptorVector2);
 
+  EndTimer(&timeAccumulator, DESCRIPTOR_EXTRACTION);
+
+  StartTimer(&timeAccumulator, DESCRIPTOR_MATCHING);
   // Match Interest Points
   vector<cv::Point>points_1;
   vector<cv::Point>points_2;
   FindMatches(desiciptorVector1, desiciptorVector2, points_1, points_2);
-  // printf("interespoints = %lu %lu\n", interestPoints1.size(), interestPoints2.size());
-  // printf("Matched points - %lu, %lu\n", points_1.size(), points_2.size());
+
+  EndTimer(&timeAccumulator, DESCRIPTOR_MATCHING);
+
 
 // // OPENCV ROUTINES TO STITCH CODE, CREATE SEPARATE FUNCTION
-  Mat imcolor1 = imread("../../images/bryce_left_02.png", IMREAD_COLOR);
-  Mat imcolor2 = imread("../../images/bryce_right_02.png", IMREAD_COLOR);
-  imcolor1.convertTo(imcolor1, CV_32FC3);
-  imcolor1 /= 255.0;
 
-  imcolor2.convertTo(imcolor2, CV_32FC3);
-  imcolor2 /= 255.0;
-
+  StartTimer(&timeAccumulator, OPENCV_ROUTINES);
 
   Mat homographyMat_1 = Mat::eye(3, 3, CV_32F);
   Mat homographyMat_2 = (cv::findHomography(points_2, points_1, RANSAC, 4.0));
@@ -200,7 +213,7 @@ int main(int argc, char const *argv[])
   double xMax = 0;
   double yMax = 0;
 
-  std::vector<Point2d> corners = getWarpCorners(imcolor1, homographyMat_1);
+  std::vector<Point2d> corners = getWarpCorners(img_1, homographyMat_1);
   for (uint32_t j = 0; j < corners.size(); j++) 
   {
     xMin = std::min(xMin, corners[j].x);
@@ -209,7 +222,7 @@ int main(int argc, char const *argv[])
     yMax = std::max(yMax, corners[j].y);
   }
 
-  corners = getWarpCorners(imcolor2, homographyMat_2);
+  corners = getWarpCorners(img_2, homographyMat_2);
   for (uint32_t j = 0; j < corners.size(); j++) 
   {
     xMin = std::min(xMin, corners[j].x);
@@ -228,18 +241,22 @@ int main(int argc, char const *argv[])
   homographyMat_1 = (transM * homographyMat_1) / homographyMat_1.at<float>(1, 1);
   homographyMat_2 = (transM * homographyMat_2) / homographyMat_2.at<float>(1, 1);
 
-  Mat panorama = Mat::zeros(height, width, imcolor1.type());
-  Mat pano_mask = Mat::zeros(height, width, imcolor1.type());
+  Mat panorama = Mat::zeros(height, width, img_1.type());
+  Mat pano_mask = Mat::zeros(height, width, img_1.type());
 
-  Mat img_mask1 = createMask(imcolor1);
+  Mat img_mask1 = createMask(img_1);
   cv::warpPerspective(img_mask1, img_mask1, homographyMat_1, Size(width, height));
-  panorama = stitchImages(panorama, imcolor1, homographyMat_1, pano_mask, img_mask1);
+  panorama = stitchImages(panorama, img_1, homographyMat_1, pano_mask, img_mask1);
 
   pano_mask = pano_mask + img_mask1;
 
-  Mat img_mask2 = createMask(imcolor2);
+  Mat img_mask2 = createMask(img_2);
   cv::warpPerspective(img_mask2, img_mask2, homographyMat_2, Size(width, height));
-  panorama = stitchImages(panorama, imcolor2, homographyMat_2, pano_mask, img_mask2);
+  panorama = stitchImages(panorama, img_2, homographyMat_2, pano_mask, img_mask2);
+
+  EndTimer(&timeAccumulator, OPENCV_ROUTINES);
+  EndTimer(&timeAccumulator, TOTAL_TIME);
+  PrintTimes(&timeAccumulator);
 
   imshow("pano", panorama);
   waitKey(0);

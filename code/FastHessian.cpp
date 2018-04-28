@@ -75,13 +75,13 @@ void FastHessian::getIpoints()
   ipts.clear();
 
   // Build the response map
-  StartTimer(&timeAccumulator, RESPONSES);
+  // StartTimer(&timeAccumulator, RESPONSES);
   buildResponseMap();
-  EndTimer(&timeAccumulator, RESPONSES);
+  // EndTimer(&timeAccumulator, RESPONSES);
 
   // Get the response layers
   ResponseLayer *b, *m, *t;
-  StartTimer(&timeAccumulator, NMS);
+  // StartTimer(&timeAccumulator, NMS);
   for (int o = 0; o < octaves; ++o) for (int i = 0; i <= 1; ++i)
   {
     b = responseMap.at(filter_map[o][i]);
@@ -101,7 +101,7 @@ void FastHessian::getIpoints()
       }
     }
   }
-  EndTimer(&timeAccumulator, NMS);
+  // EndTimer(&timeAccumulator, NMS);
 }
 
 //-------------------------------------------------------
