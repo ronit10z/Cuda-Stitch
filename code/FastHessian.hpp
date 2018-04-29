@@ -21,7 +21,7 @@ class FastHessian {
   
   public:
    
-	FastHessian(Mat img, 
+	FastHessian(Mat &integralImage, Mat &img, 
 				std::vector<cv::Point> &ipts, 
 				const int octaves, 
 				const int intervals, 
@@ -54,7 +54,8 @@ class FastHessian {
 
 	//---------------- Private Variables -----------------//
 
-	Mat img;
+	const Mat &integralImage;
+	const Mat &img;
 	int i_width, i_height;
 
 	std::vector<cv::Point> &ipts;

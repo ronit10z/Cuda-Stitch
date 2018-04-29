@@ -47,9 +47,9 @@ void PrintTimes(TimeAccumulator* timeAccumulator)
     double time = timeAccumulator->timeTaken[i];
     double currentPercent = (time / totalTime) * 100;
     totalPercentageAccounted += currentPercent;
-    printf("%lf ms         %lf      %s\n", time, currentPercent, ACTIVITY_NAMES[i]);
+    printf("%.4f ms         %.4f      %s\n", time, currentPercent, ACTIVITY_NAMES[i]);
   }
 
-  printf("%lf per-cent accounted for.\n", totalPercentageAccounted);
-  printf("\nTOTAL TIME TAKEN %lf \n", totalTime);
+  printf("%.4f per-cent accounted for.\n", totalPercentageAccounted);
+  printf("\nTOTAL TIME TAKEN %.4f \n", totalTime);
 }

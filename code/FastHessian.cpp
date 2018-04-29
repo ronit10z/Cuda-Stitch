@@ -1,4 +1,5 @@
 #include <vector>
+#include <assert.h>
 
 #include "FastHessian.hpp"
 
@@ -29,13 +30,32 @@ inline float BoxIntegral(Mat img, int row, int col, int rows, int cols)
   return std::max(0.f, A - B - C + D);
 }
 
+inline float BoxSumIntegral(const Mat &img, int row, int col, int rows, int cols)
+{
+  int r1 = std::min(row,          img.rows) - 1;
+  int c1 = std::min(col,          img.cols)  - 1;
+  int r2 = std::min(row + rows,   img.rows) - 1;
+  int c2 = std::min(col + cols,   img.cols)  - 1;
+
+  float sum = 0;
+  for (int r = r1; r < r2; ++r)
+  {
+    for (int c = c1; c < c2; ++c)
+    {
+      sum += img.at<float>(r, c);
+    }
+  }
+  return sum;
+
+}
+
 //-------------------------------------------------------
 
 //! Constructor with image
-FastHessian::FastHessian(Mat img, std::vector<cv::Point> &ipts, 
+FastHessian::FastHessian(Mat &integralImage, Mat &img, std::vector<cv::Point> &ipts, 
                          const int octaves, const int intervals, const int init_sample, 
                          const float thresh) 
-                         : ipts(ipts)
+                         : integralImage(integralImage), img(img), ipts(ipts)
 {
   // Save parameter set
   this->octaves = 
@@ -46,10 +66,10 @@ FastHessian::FastHessian(Mat img, std::vector<cv::Point> &ipts,
     (init_sample > 0 && init_sample <= 6 ? init_sample : INIT_SAMPLE);
   this->thresh = (thresh >= 0 ? thresh : THRES);
 
-  this->img = img;
+  // this->integralImage = img;
 
-  i_height = img.rows;
-  i_width = img.cols;
+  i_height = integralImage.rows;
+  i_width = integralImage.cols;
 }
 
 //-------------------------------------------------------
@@ -109,13 +129,6 @@ void FastHessian::getIpoints()
 //! Build map of DoH responses
 void FastHessian::buildResponseMap()
 {
-  // Calculate responses for the first 4 octaves:
-  // Oct1: 9,  15, 21, 27
-  // Oct2: 15, 27, 39, 51
-  // Oct3: 27, 51, 75, 99
-  // Oct4: 51, 99, 147,195
-  // Oct5: 99, 195,291,387
-
   // Deallocate memory and clear any existing response layers
   for(unsigned int i = 0; i < responseMap.size(); ++i)  
     delete responseMap[i];
@@ -172,7 +185,6 @@ void FastHessian::buildResponseMap()
 void FastHessian::buildResponseLayer(ResponseLayer *rl)
 {
   float *responses = rl->responses;         // response storage
-  unsigned char *laplacian = rl->laplacian; // laplacian sign storage
   int step = rl->step;                      // step size for this filter
   int b = (rl->filter - 1) / 2 + 1;         // border for this filter
   int l = rl->filter / 3;                   // lobe for this filter (filter size / 3)
@@ -189,14 +201,14 @@ void FastHessian::buildResponseLayer(ResponseLayer *rl)
       c = ac * step; 
 
       // Compute response components
-      Dxx = BoxIntegral(img, r - l + 1, c - b, 2*l - 1, w)
-          - BoxIntegral(img, r - l + 1, c - l / 2, 2*l - 1, l)*3;
-      Dyy = BoxIntegral(img, r - b, c - l + 1, w, 2*l - 1)
-          - BoxIntegral(img, r - l / 2, c - l + 1, l, 2*l - 1)*3;
-      Dxy = + BoxIntegral(img, r - l, c + 1, l, l)
-            + BoxIntegral(img, r + 1, c - l, l, l)
-            - BoxIntegral(img, r - l, c - l, l, l)
-            - BoxIntegral(img, r + 1, c + 1, l, l);
+      Dxx = BoxIntegral(integralImage, r - l + 1, c - b, 2*l - 1, w)
+          - BoxIntegral(integralImage, r - l + 1, c - l / 2, 2*l - 1, l)*3;
+      Dyy = BoxIntegral(integralImage, r - b, c - l + 1, w, 2*l - 1)
+          - BoxIntegral(integralImage, r - l / 2, c - l + 1, l, 2*l - 1)*3;
+      Dxy = + BoxIntegral(integralImage, r - l, c + 1, l, l)
+            + BoxIntegral(integralImage, r + 1, c - l, l, l)
+            - BoxIntegral(integralImage, r - l, c - l, l, l)
+            - BoxIntegral(integralImage, r + 1, c + 1, l, l);
 
       // Normalise the filter responses with respect to their size
       Dxx *= inverse_area;
@@ -205,15 +217,15 @@ void FastHessian::buildResponseLayer(ResponseLayer *rl)
      
       // Get the determinant of hessian response & laplacian sign
       responses[index] = (Dxx * Dyy - 0.81f * Dxy * Dxy);
-      laplacian[index] = (Dxx + Dyy >= 0 ? 1 : 0);
     }
   }
 }
   
-//-------------------------------------------------------
+// -------------------------------------------------------
 
 //! Non Maximal Suppression function
-int FastHessian::isExtremum(int r, int c, ResponseLayer *t, ResponseLayer *m, ResponseLayer *b)
+int FastHessian::isExtremum(int r, int c, ResponseLayer *t, ResponseLayer *m, 
+  ResponseLayer *b)
 {
   // bounds check
   int layerBorder = (t->filter + 1) / (2 * t->step);
@@ -254,7 +266,7 @@ void FastHessian::interpolateExtremum(int r, int c, ResponseLayer *t, ResponseLa
  
   // Get the offsets to the actual location of the extremum
   double xi = 0, xr = 0, xc = 0;
-  interpolateStep(r, c, t, m, b, &xi, &xr, &xc );
+  // interpolateStep(r, c, t, m, b, &xi, &xr, &xc );
 
   // If point is sufficiently close to the actual extremum
   if( fabs( xi ) < 0.5f  &&  fabs( xr ) < 0.5f  &&  fabs( xc ) < 0.5f )

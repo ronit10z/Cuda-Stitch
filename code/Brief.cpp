@@ -9,10 +9,6 @@ using namespace cv;
 
 #define THRESHOLD 0.8
 
-void PrintBriefDescriptor(BriefPointDescriptor &descript) {
-  printf("%lu %lu %lu %lu\n", descript.desc_array[0], descript.desc_array[1], 
-  descript.desc_array[2], descript.desc_array[3]);
-}
 // sets the bit corresponding to the index to val.
 static inline void BriefSet(int index, bool val, BriefPointDescriptor &descriptor, int k) {
   if (index < 0 || index > 255) 
@@ -29,8 +25,6 @@ static inline void BriefSet(int index, bool val, BriefPointDescriptor &descripto
     long mask = 1L << offset;
     descriptor.desc_array[idx] |= mask;
   }
-  // if (k == 119) PrintBriefDescriptor(descriptor);
-
 }
 
 //spit out the descriptor in bit form on cout for debugging if needed
@@ -68,9 +62,6 @@ int Brief::ReadFile(const char* filename)
   	for (int i = 0; i < this->numBriefPairs; i++) {
   		infile >> x1 >> y1 >> x2 >> y2;
 
-      // cout << x1 << " " << y1 << " "  << x2 << " " << y2;
-      // exit(1);
-  		
       this->briefPairs[i].x1 = x1;
       this->briefPairs[i].y1 = y1;
       this->briefPairs[i].x2 = x2;
@@ -86,12 +77,6 @@ inline bool isInBound(int r, int c, int h, int w)
   return r >= 0 && r < h && c >= 0 && c < w;
 }
 
-// bool hasValidPatch(int h, int w, int row, int col) 
-// {
-//   int r = PATCH_SIZE / 2;
-//   return isInBound(row - r, col - r, h, w) && isInBound(row + r, col + r,h,w);
-// }
-
 //Determine if the point is within bounds
 bool Brief::isValidPoint(const Point &ipt, int width, int height)
 {
@@ -100,7 +85,8 @@ bool Brief::isValidPoint(const Point &ipt, int width, int height)
   // int dist = (this->patchWidth);
   int dist = 4;
 
-  return isInBound(row - dist, col - dist, height, width) && isInBound(row + dist, col + dist,height,width); 
+  return isInBound(row - dist, col - dist, height, width) && 
+    isInBound(row + dist, col + dist,height,width); 
 }
 
 
@@ -125,15 +111,6 @@ void Brief::ComputeBriefDescriptor(const cv::Mat &img, std::vector<Point> &ipts,
     // float patch[9][9];
     if (isValidPoint(ipoint, width, height))
     {
-      // for (int i = 0; i < patchSize; ++i)
-      // {
-      //   for (int j = 0; j < patchSize; ++j)
-      //   {
-      //     patch[i][j] = blurredIm.at<float>(row + i - patchSize/2, col + j - patchSize/2);
-      //   }
-      // }
-      // TODO: WHY IS THE RUM ALWAYS GONE, why is patch faster?
-
       desiciptorVector[j].col = col;
       desiciptorVector[j].row = row;
 
@@ -155,16 +132,41 @@ void Brief::ComputeBriefDescriptor(const cv::Mat &img, std::vector<Point> &ipts,
   desiciptorVector.resize(j);
 }
 
-static inline int CountOnes(uint64_t num)
+const uint64_t m1  = 0x5555555555555555; //binary: 0101...
+const uint64_t m2  = 0x3333333333333333; //binary: 00110011..
+const uint64_t m4  = 0x0f0f0f0f0f0f0f0f; //binary:  4 zeros,  4 ones ...
+const uint64_t m8  = 0x00ff00ff00ff00ff; //binary:  8 zeros,  8 ones ...
+const uint64_t m16 = 0x0000ffff0000ffff; //binary: 16 zeros, 16 ones ...
+const uint64_t m32 = 0x00000000ffffffff; //binary: 32 zeros, 32 ones
+const uint64_t hff = 0xffffffffffffffff; //binary: all ones
+const uint64_t h01 = 0x0101010101010101; //the sum of 256 to the power of 0,1,2,3...
+static inline int CountOnes(uint64_t x)
 {
-  int count = 0;
-  while(num != 0)
-  {
-    count += (num & 0x1);
-    num >>= 1;
-  }
+  // naive 
+  // int count = 0;
+  // while (x != 0)
+  // {
+  //   count += x & 0x1;
+  //   x >>= 1;
+  // }
+  // return count;
 
-  return count;
+  // 17 operations, for systems with slow multiplication
+  // x -= (x >> 1) & m1;             //put count of each 2 bits into those 2 bits
+  // x = (x & m2) + ((x >> 2) & m2); //put count of each 4 bits into those 4 bits 
+  // x = (x + (x >> 4)) & m4;        //put count of each 8 bits into those 8 bits 
+  // x += x >>  8;  //put count of each 16 bits into their lowest 8 bits
+  // x += x >> 16;  //put count of each 32 bits into their lowest 8 bits
+  // x += x >> 32;  //put count of each 64 bits into their lowest 8 bits
+  // return x & 0x7f;
+
+  // return __builtin_popcount(x);
+
+  // fastest, uses only 12 operations
+  x -= (x >> 1) & m1;             //put count of each 2 bits into those 2 bits
+  x = (x & m2) + ((x >> 2) & m2); //put count of each 4 bits into those 4 bits 
+  x = (x + (x >> 4)) & m4;        //put count of each 8 bits into those 8 bits 
+  return (x * h01) >> 56;  //returns left 8 bits of x + (x<<8) + (x<<16) + (x<<24) + ... 
 }
 
 // returns the hamming distance between two descripters
@@ -195,7 +197,6 @@ void FindMatches(vector<BriefPointDescriptor> &descripts1,
       BriefPointDescriptor &descriptor2 = descripts2[j];
       int distance = FindDistance(descriptor1, descriptor2);
 
-      // printf("%d %d\n", j, distance);
       if (distance < bestDistance)
       {
         bestj = j;
@@ -208,13 +209,10 @@ void FindMatches(vector<BriefPointDescriptor> &descripts1,
     if (secondBest == 0) ratio = bestDistance;
     else ratio = static_cast<float>(bestDistance) / static_cast<float>(secondBest);  
     
-    // printf("best Distance = %d, secondBest = %d, ratio = %f\n", bestDistance, secondBest, ratio);
     if (ratio < THRESHOLD)
     {
-      // printf("best j = %d\n", bestj);
       points1.push_back(Point(descripts1[i].col, descripts1[i].row));
       points2.push_back(Point(descripts2[bestj].col, descripts2[bestj].row));
     }
-    // exit(1);
   }
 }
