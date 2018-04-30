@@ -27,10 +27,11 @@ using namespace std;
 
 extern TimeAccumulator timeAccumulator;
 
-
 #define PATCH_SIZE 9
-#define DIM_RATIO 0.3
-#define SAMPLING_RATE 2
+#define DIM_RATIO 0.4
+#define SAMPLING_RATE 1
+#define FRAMES_PER_HOMOGRAPHY 3
+#define HOMOGRAPHY_RATIO 0.005
 
 //-------------------------------------------------------
 
@@ -57,7 +58,7 @@ Mat createMask(Mat& im) {
     return mask;
 }
 
-std::vector<Point2d> getWarpCorners(Mat& im, Mat& H) {
+std::vector<Point2d> getWarpCorners(const Mat& im, const Mat& H) {
     std::vector<Point2d> im_corners, im_corners_warped;
     im_corners.reserve(4);
 
@@ -81,7 +82,7 @@ Mat getTranslationMatrix(float x, float y) {
     return M;
 }
 
-Mat stitchImages(Mat& pano, Mat& image, Mat& H, Mat& pano_mask, Mat& img_mask) 
+Mat stitchImages(Mat& pano, const Mat& image, const Mat& H, Mat& pano_mask, Mat& img_mask) 
 {
   int width = pano.cols;
   int height = pano.rows;
@@ -125,63 +126,102 @@ void setupCudaDevice()
   cudaSetDevice(0);
 }
 
+Stitcher::Mode mode = Stitcher::PANORAMA;
+
 int main(int argc, char const *argv[])
 {
   // TODO: change filename to command line arguement, have assert or 
   // exit if argc is not enough.
-  const char* videoName1 = "../../videos/HHL.MOV";
-  const char* videoName2 = "../../videos/HHR.MOV";
+  const char* videoName1 = "../../videos/CICL.MOV";
+  const char* videoName2 = "../../videos/CICR.MOV";
 
   VideoCapture capture_1(videoName1);
   VideoCapture capture_2(videoName2);
-
-  // VideoWriter vwriter = VideoWriter("../../videos/pano.MPEG-4", VideoWriter::fourcc('M','J','P','G'), 30, Size(600, 600));
-  // vwriter.open("../../videos/pano.MPEG-4", VideoWriter::fourcc('M','J','P','G'), 30, Size(600, 600));
+  // printf("here\n");
   Mat img_1;
   Mat img_2;
-  bool videoOpen = false;
   Size frameSize;
 
-  // // if(!capture.isOpened()) throw "Error when reading steam_avi";
-  // // capture >> frame;
-
-  // imshow("L", img_1);
-  // imshow("R", img_2);
-  // waitKey(0); 
-
-
   const char* fileName = "../pointOffsets.txt";
-  // VideoWriter oVideoWriter;
 
-  int frame_width = 1.5* static_cast<int>(capture_1.get(CAP_PROP_FRAME_WIDTH)); //get the width of frames of the video
-  int frame_height = 1.5 * static_cast<int>(capture_1.get(CAP_PROP_FRAME_HEIGHT)); //get the height of frames of the video
+  int frame_width = 2* static_cast<int>(capture_1.get(CAP_PROP_FRAME_WIDTH)); //get the width of frames of the video
+  int frame_height = 2 * static_cast<int>(capture_1.get(CAP_PROP_FRAME_HEIGHT)); //get the height of frames of the video
   Size frame_size(frame_width, frame_height);
-  int frames_per_second = 20;
+  int frames_per_second = 30;
   VideoWriter oVideoWriter("../../videos/outcpp.avi", VideoWriter::fourcc('M', 'J', 'P', 'G'), 
-                                                               frames_per_second, frame_size, true);
-  // while(1)
-  // {
-  //   capture_1 >> img_1;
-  //   if(img_1.empty()) break;
-  //   resize(img_1, img_1, frame_size);
-  //   oVideoWriter.write(img_1);
-  // }
-  // oVideoWriter.release();
+                                                                frames_per_second, frame_size, true);
+  // Mat oldHomography;
 
-  // // return 0;
+  SetupTimer(&timeAccumulator);
+  StartTimer(&timeAccumulator, TOTAL_TIME);
+  int frames = 0;
 
+  FourTupleVector fourTuplevector;
+  Brief briefDescriptor(fourTuplevector, PATCH_SIZE);
+  briefDescriptor.ReadFile(fileName);
+  Mat oldHomography;
+  bool isFirstRun = true;
+
+  capture_1 >> img_1;
+  capture_2 >> img_2;
+  frames++;
+    // Declare Ipoints and other stuff
+
+  // // Open image and conver to grey scale-space
+  StartTimer(&timeAccumulator, IMAGE_IO);
+  resize(img_1, img_1, Size(img_1.cols * DIM_RATIO, img_1.rows * DIM_RATIO));
+  Mat gray8_1(img_1.size(), CV_8U, 1);
+  Mat gray32_1(img_1.size(), CV_32F, 1);
+  cvtColor(img_1, gray8_1, CV_BGR2GRAY);
+  gray8_1.convertTo(gray32_1, CV_32F, 1.0/255.0, 0);
+  img_1.convertTo(img_1, CV_32FC3);
+  img_1 /= 255.0;
+
+  resize(img_2, img_2, Size(img_2.cols * DIM_RATIO, img_2.rows * DIM_RATIO));
+  Mat gray8_2(img_2.size(), CV_8U, 1);
+  Mat gray32_2(img_2.size(), CV_32F, 1);
+  cvtColor(img_2, gray8_2, CV_BGR2GRAY);
+  gray8_2.convertTo(gray32_2, CV_32F, 1.0/255.0, 0);
+  img_2.convertTo(img_2, CV_32FC3);
+  img_2 /= 255.0;
+
+  EndTimer(&timeAccumulator, IMAGE_IO);
+
+  // // Compute Summed table representation of image
+  StartTimer(&timeAccumulator, SUMMED_TABLE);
+
+  Mat integralImage_1(img_1.size(), CV_32F, 1);
+  GenerateIntegralImage(gray32_1, integralImage_1);
+
+  Mat integralImage_2(img_2.size(), CV_32F, 1);
+  GenerateIntegralImage(gray32_2, integralImage_2);
+  EndTimer(&timeAccumulator, SUMMED_TABLE);
+
+
+
+  std::vector<Point> interestPoints1;
+  FastHessian fh_1(integralImage_1, gray32_1, interestPoints1, 5, 4, SAMPLING_RATE, 0.00004f);
+    
+  std::vector<Point> interestPoints2;
+  FastHessian fh_2(integralImage_2, gray32_2, interestPoints2, 5, 4, SAMPLING_RATE, 0.00004f);
+    
+
+  vector<cv::Point>points_1;
+  vector<cv::Point>points_2;
+
+
+  vector<BriefPointDescriptor> descriptorVector1;
+  vector<BriefPointDescriptor> descriptorVector2;
   while (1) 
   {
     capture_1 >> img_1;
     capture_2 >> img_2;
     if(img_1.empty() || img_2.empty()) break;
+    frames++;
     // Declare Ipoints and other stuff
-    SetupTimer(&timeAccumulator);
-    StartTimer(&timeAccumulator, TOTAL_TIME);
 
     // // Open image and conver to grey scale-space
     StartTimer(&timeAccumulator, IMAGE_IO);
-    // Mat img_1 = imread("../../images/HHL.png");
     resize(img_1, img_1, Size(img_1.cols * DIM_RATIO, img_1.rows * DIM_RATIO));
     Mat gray8_1(img_1.size(), CV_8U, 1);
     Mat gray32_1(img_1.size(), CV_32F, 1);
@@ -190,7 +230,6 @@ int main(int argc, char const *argv[])
     img_1.convertTo(img_1, CV_32FC3);
     img_1 /= 255.0;
 
-    // Mat img_2 = imread("../../images/HHR.png");
     resize(img_2, img_2, Size(img_2.cols * DIM_RATIO, img_2.rows * DIM_RATIO));
     Mat gray8_2(img_2.size(), CV_8U, 1);
     Mat gray32_2(img_2.size(), CV_32F, 1);
@@ -214,117 +253,130 @@ int main(int argc, char const *argv[])
     // Compute Interest Points from summed table representation
     StartTimer(&timeAccumulator, INTEREST_POINT_DETECTION);
 
-    std::vector<Point> interestPoints1;
-    FastHessian fh_1(integralImage_1, gray32_1, interestPoints1, 5, 4, SAMPLING_RATE, 0.00004f);
+    fh_1.SetImage(integralImage_1, gray32_1);
     fh_1.getIpoints();
 
-    std::vector<Point> interestPoints2;
-    FastHessian fh_2(integralImage_2, gray32_2, interestPoints2, 5, 4, SAMPLING_RATE, 0.00004f);
+    fh_2.SetImage(integralImage_2, gray32_2);
     fh_2.getIpoints();
-    EndTimer(&timeAccumulator, INTEREST_POINT_DETECTION);
-    // printf("Num interest points = %lu, %lu\n", interestPoints1.size(), interestPoints2.size());
 
+    EndTimer(&timeAccumulator, INTEREST_POINT_DETECTION);
 
     StartTimer(&timeAccumulator, DESCRIPTOR_EXTRACTION);
     // Compute Brief Descriptor based off interest points, images are greyscale, CV_32F
-    FourTupleVector fourTuplevector;
-    Brief briefDescriptor(fourTuplevector, PATCH_SIZE);
-    briefDescriptor.ReadFile(fileName);
-    vector<BriefPointDescriptor> desiciptorVector1;
-    briefDescriptor.ComputeBriefDescriptor(gray32_1, interestPoints1, desiciptorVector1);
-    vector<BriefPointDescriptor> desiciptorVector2;
-    briefDescriptor.ComputeBriefDescriptor(gray32_2, interestPoints2, desiciptorVector2);
+    
+    briefDescriptor.ComputeBriefDescriptor(gray32_1, interestPoints1, descriptorVector1);
+    briefDescriptor.ComputeBriefDescriptor(gray32_2, interestPoints2, descriptorVector2);
 
     EndTimer(&timeAccumulator, DESCRIPTOR_EXTRACTION);
 
     StartTimer(&timeAccumulator, DESCRIPTOR_MATCHING);
     // Match Interest Points
-    vector<cv::Point>points_1;
-    vector<cv::Point>points_2;
-    FindMatches(desiciptorVector1, desiciptorVector2, points_1, points_2);
+    FindMatches(descriptorVector1, descriptorVector2, points_1, points_2);
 
     EndTimer(&timeAccumulator, DESCRIPTOR_MATCHING);
 
 
-  // // OPENCV ROUTINES TO STITCH CODE, CREATE SEPARATE FUNCTION
-
     StartTimer(&timeAccumulator, OPENCV_ROUTINES);
 
     Mat homographyMat_1 = Mat::eye(3, 3, CV_32F);
-    Mat homographyMat_2 = (cv::findHomography(points_2, points_1, RANSAC, 4.0));
+    Mat homographyMat_2 = (cv::findHomography(points_2, points_1, RANSAC, 2.0));
     homographyMat_2.convertTo(homographyMat_2, CV_32F);
 
-    double xMin = INT_MAX; 
-    double yMin = INT_MAX;
-    double xMax = 0;
-    double yMax = 0;
-
-    std::vector<Point2d> corners = getWarpCorners(img_1, homographyMat_1);
-    for (uint32_t j = 0; j < corners.size(); j++) 
+    if (isFirstRun)
     {
-      xMin = std::min(xMin, corners[j].x);
-      xMax = std::max(xMax, corners[j].x);
-      yMin = std::min(yMin, corners[j].y);
-      yMax = std::max(yMax, corners[j].y);
+      isFirstRun = false;
+      oldHomography = homographyMat_2;
     }
 
-    corners = getWarpCorners(img_2, homographyMat_2);
-    for (uint32_t j = 0; j < corners.size(); j++) 
-    {
-      xMin = std::min(xMin, corners[j].x);
-      xMax = std::max(xMax, corners[j].x);
-      yMin = std::min(yMin, corners[j].y);
-      yMax = std::max(yMax, corners[j].y);
-    }
+    homographyMat_2 = (HOMOGRAPHY_RATIO) * oldHomography + (1 - HOMOGRAPHY_RATIO) * homographyMat_2;
+    oldHomography = homographyMat_2;
 
-    // shift the panorama if warped images are out of boundaries
-    double shiftX = -xMin;
-    double shiftY = -yMin;
-    Mat transM = getTranslationMatrix(shiftX, shiftY);
-    int width = std::round(xMax - xMin);
-    int height = std::round(yMax - yMin);
-    if (!videoOpen)
-    {
-      frameSize = Size(width , height);
-      videoOpen = true;
-      // VideoWriter oVideoWriter("../../videos/outcpp.avi", VideoWriter::fourcc('M', 'J', 'P', 'G'), 
-                                                               // frames_per_second, frameSize, true);
-    }
-
-    homographyMat_1 = (transM * homographyMat_1) / homographyMat_1.at<float>(1, 1);
-    homographyMat_2 = (transM * homographyMat_2) / homographyMat_2.at<float>(1, 1);
-
-    Mat panorama = Mat::zeros(height, width, img_1.type());
-    Mat pano_mask = Mat::zeros(height, width, img_1.type());
-
-    Mat img_mask1 = createMask(img_1);
-    cv::warpPerspective(img_mask1, img_mask1, homographyMat_1, Size(width, height));
-    panorama = stitchImages(panorama, img_1, homographyMat_1, pano_mask, img_mask1);
-
-    pano_mask = pano_mask + img_mask1;
-
-    Mat img_mask2 = createMask(img_2);
-    cv::warpPerspective(img_mask2, img_mask2, homographyMat_2, Size(width, height));
-    panorama = stitchImages(panorama, img_2, homographyMat_2, pano_mask, img_mask2);
 
     EndTimer(&timeAccumulator, OPENCV_ROUTINES);
 
-    EndTimer(&timeAccumulator, TOTAL_TIME);
-    // PrintTimes(&timeAccumulator);
 
-    panorama *= 255;
-    panorama.convertTo(panorama, CV_8UC3);
-    Mat resizedPan;
-    // imshow("pano", panorama);
-    // waitKey(0);
-    // printf("Panorama rows: %d, Panorama cols: %d, frameSize: %d %d\n", panorama.rows, panorama.cols, frameSize.height, frameSize.width);
-    resize(panorama, resizedPan, frame_size);
+    for (int i = 0; i < FRAMES_PER_HOMOGRAPHY; ++i)
+    {
+      StartTimer(&timeAccumulator, OPENCV_ROUTINES);
 
-    oVideoWriter.write(resizedPan);
-    // imwrite("pano.jpg", panorama);
+      double xMin = INT_MAX; 
+      double yMin = INT_MAX;
+      double xMax = 0;
+      double yMax = 0;
+
+      std::vector<Point2d> corners = getWarpCorners(img_1, homographyMat_1);
+      for (uint32_t j = 0; j < corners.size(); j++) 
+      {
+        xMin = std::min(xMin, corners[j].x);
+        xMax = std::max(xMax, corners[j].x);
+        yMin = std::min(yMin, corners[j].y);
+        yMax = std::max(yMax, corners[j].y);
+      }
+
+      corners = getWarpCorners(img_2, homographyMat_2);
+      for (uint32_t j = 0; j < corners.size(); j++) 
+      {
+        xMin = std::min(xMin, corners[j].x);
+        xMax = std::max(xMax, corners[j].x);
+        yMin = std::min(yMin, corners[j].y);
+        yMax = std::max(yMax, corners[j].y);
+      }
+
+      // shift the panorama if warped images are out of boundaries
+      double shiftX = -xMin;
+      double shiftY = -yMin;
+      Mat transM = getTranslationMatrix(shiftX, shiftY);
+      int width = std::round(xMax - xMin);
+      int height = std::round(yMax - yMin);
+
+      homographyMat_1 = (transM * homographyMat_1) / homographyMat_1.at<float>(1, 1);
+      homographyMat_2 = (transM * homographyMat_2) / homographyMat_2.at<float>(1, 1);
+      Mat panorama = Mat::zeros(height, width, img_1.type());
+      Mat pano_mask = Mat::zeros(height, width, img_1.type());
+
+      Mat img_mask1 = createMask(img_1);
+      cv::warpPerspective(img_mask1, img_mask1, homographyMat_1, Size(width, height));
+      panorama = stitchImages(panorama, img_1, homographyMat_1, pano_mask, img_mask1);
+
+      pano_mask = pano_mask + img_mask1;
+
+      Mat img_mask2 = createMask(img_2);
+      cv::warpPerspective(img_mask2, img_mask2, homographyMat_2, Size(width, height));
+      panorama = stitchImages(panorama, img_2, homographyMat_2, pano_mask, img_mask2);
+
+      panorama *= 255;
+      panorama.convertTo(panorama, CV_8UC3);
+      Mat resizedPan;
+      resize(panorama, resizedPan, frame_size);
+
+      EndTimer(&timeAccumulator, OPENCV_ROUTINES);
+      oVideoWriter.write(resizedPan);
+
+      // img_1.release();
+      // img_2.release();
+      // panorama.release();
+
+      if (i != FRAMES_PER_HOMOGRAPHY - 1)
+      {
+        capture_1 >> img_1;
+        capture_2 >> img_2;
+        if(img_1.empty() || img_2.empty()) break;
+        frames++;
+        resize(img_1, img_1, Size(img_1.cols * DIM_RATIO, img_1.rows * DIM_RATIO));
+        img_1.convertTo(img_1, CV_32FC3);
+        img_1 /= 255.0;
+        resize(img_2, img_2, Size(img_2.cols * DIM_RATIO, img_2.rows * DIM_RATIO));
+        img_2.convertTo(img_2, CV_32FC3);
+        img_2 /= 255.0;
+      }
+    }
+    // printf("times\n");
   }
-  // imshow("pano", panorama);
-  // waitKey(0);
+
+  EndTimer(&timeAccumulator, TOTAL_TIME);
+  PrintTimes(&timeAccumulator);
+  float frameRate = static_cast<float>(frames)/(timeAccumulator.timeTaken[TOTAL_TIME]/1000);
+  printf("Frame Rate = %f\n", frameRate);
   oVideoWriter.release();
 
   return 0;

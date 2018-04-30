@@ -66,8 +66,59 @@ FastHessian::FastHessian(Mat &integralImage, Mat &img, std::vector<cv::Point> &i
     (init_sample > 0 && init_sample <= 6 ? init_sample : INIT_SAMPLE);
   this->thresh = (thresh >= 0 ? thresh : THRES);
 
-  // this->integralImage = img;
+  i_height = integralImage.rows;
+  i_width = integralImage.cols;
 
+
+    // Deallocate memory and clear any existing response layers
+  for(unsigned int i = 0; i < responseMap.size(); ++i)  
+    delete responseMap[i];
+  responseMap.clear();
+
+  // Get image attributes
+  int w = (i_width / init_sample);
+  int h = (i_height / init_sample);
+  int s = (init_sample);
+
+  // Calculate approximated determinant of hessian values
+  if (octaves >= 1)
+  {
+    responseMap.push_back(new ResponseLayer(w,   h,   s,   9));
+    responseMap.push_back(new ResponseLayer(w,   h,   s,   15));
+    responseMap.push_back(new ResponseLayer(w,   h,   s,   21));
+    responseMap.push_back(new ResponseLayer(w,   h,   s,   27));
+  }
+ 
+  if (octaves >= 2)
+  {
+    responseMap.push_back(new ResponseLayer(w/2, h/2, s*2, 39));
+    responseMap.push_back(new ResponseLayer(w/2, h/2, s*2, 51));
+  }
+
+  if (octaves >= 3)
+  {
+    responseMap.push_back(new ResponseLayer(w/4, h/4, s*4, 75));
+    responseMap.push_back(new ResponseLayer(w/4, h/4, s*4, 99));
+  }
+
+  if (octaves >= 4)
+  {
+    responseMap.push_back(new ResponseLayer(w/8, h/8, s*8, 147));
+    responseMap.push_back(new ResponseLayer(w/8, h/8, s*8, 195));
+  }
+
+  if (octaves >= 5)
+  {
+    responseMap.push_back(new ResponseLayer(w/16, h/16, s*16, 291));
+    responseMap.push_back(new ResponseLayer(w/16, h/16, s*16, 387));
+  }
+}
+
+
+void FastHessian::SetImage(Mat &integralImage, Mat &img)
+{
+  this->integralImage = integralImage;
+  this->img = img;
   i_height = integralImage.rows;
   i_width = integralImage.cols;
 }
@@ -129,49 +180,6 @@ void FastHessian::getIpoints()
 //! Build map of DoH responses
 void FastHessian::buildResponseMap()
 {
-  // Deallocate memory and clear any existing response layers
-  for(unsigned int i = 0; i < responseMap.size(); ++i)  
-    delete responseMap[i];
-  responseMap.clear();
-
-  // Get image attributes
-  int w = (i_width / init_sample);
-  int h = (i_height / init_sample);
-  int s = (init_sample);
-
-  // Calculate approximated determinant of hessian values
-  if (octaves >= 1)
-  {
-    responseMap.push_back(new ResponseLayer(w,   h,   s,   9));
-    responseMap.push_back(new ResponseLayer(w,   h,   s,   15));
-    responseMap.push_back(new ResponseLayer(w,   h,   s,   21));
-    responseMap.push_back(new ResponseLayer(w,   h,   s,   27));
-  }
- 
-  if (octaves >= 2)
-  {
-    responseMap.push_back(new ResponseLayer(w/2, h/2, s*2, 39));
-    responseMap.push_back(new ResponseLayer(w/2, h/2, s*2, 51));
-  }
-
-  if (octaves >= 3)
-  {
-    responseMap.push_back(new ResponseLayer(w/4, h/4, s*4, 75));
-    responseMap.push_back(new ResponseLayer(w/4, h/4, s*4, 99));
-  }
-
-  if (octaves >= 4)
-  {
-    responseMap.push_back(new ResponseLayer(w/8, h/8, s*8, 147));
-    responseMap.push_back(new ResponseLayer(w/8, h/8, s*8, 195));
-  }
-
-  if (octaves >= 5)
-  {
-    responseMap.push_back(new ResponseLayer(w/16, h/16, s*16, 291));
-    responseMap.push_back(new ResponseLayer(w/16, h/16, s*16, 387));
-  }
-
   // Extract responses from the image
   for (unsigned int i = 0; i < responseMap.size(); ++i)
   {
@@ -185,6 +193,7 @@ void FastHessian::buildResponseMap()
 void FastHessian::buildResponseLayer(ResponseLayer *rl)
 {
   float *responses = rl->responses;         // response storage
+
   int step = rl->step;                      // step size for this filter
   int b = (rl->filter - 1) / 2 + 1;         // border for this filter
   int l = rl->filter / 3;                   // lobe for this filter (filter size / 3)

@@ -22,14 +22,12 @@ class FastHessian {
   public:
    
 	FastHessian(Mat &integralImage, Mat &img, 
-				std::vector<cv::Point> &ipts, 
-				const int octaves, 
-				const int intervals, 
-				const int init_sample, 
-				const float thres);
+		std::vector<cv::Point> &ipts, const int octaves, 
+		const int intervals, const int init_sample, const float thresh);
 
 	~FastHessian();
 
+	void SetImage(Mat &integralImage, Mat &img);
 	void getIpoints();
 	
   private:
@@ -54,8 +52,8 @@ class FastHessian {
 
 	//---------------- Private Variables -----------------//
 
-	const Mat &integralImage;
-	const Mat &img;
+	Mat &integralImage;
+	Mat &img;
 	int i_width, i_height;
 
 	std::vector<cv::Point> &ipts;

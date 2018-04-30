@@ -94,6 +94,7 @@ bool Brief::isValidPoint(const Point &ipt, int width, int height)
 // loops over all the points and calculates the descripter if the point is within bounds.
 void Brief::ComputeBriefDescriptor(const cv::Mat &img, std::vector<Point> &ipts, std::vector<BriefPointDescriptor> &desiciptorVector)
 { 
+  desiciptorVector.clear();
   desiciptorVector.resize(ipts.size());
   int j = 0;
   int width = (img.cols);
@@ -185,6 +186,9 @@ void FindMatches(vector<BriefPointDescriptor> &descripts1,
   vector<BriefPointDescriptor> &descripts2, vector<cv::Point> &points1,
   vector<cv::Point> &points2)
 {
+  points1.clear();
+  points2.clear();
+
   for (uint32_t i = 0; i < descripts1.size(); ++i)
   {
     BriefPointDescriptor &descriptor1 = descripts1[i];
