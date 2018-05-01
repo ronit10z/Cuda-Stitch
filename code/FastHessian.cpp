@@ -13,6 +13,8 @@ extern TimeAccumulator timeAccumulator;
 
 using namespace std;
 
+#define CUDA_CHECK_CALL(x) __cudaCheckMsg(x, __FILE__, __LINE__)
+
 inline float BoxIntegral(Mat img, int row, int col, int rows, int cols) 
 {
   // The subtraction by one for row/col is because row/col is inclusive.
@@ -146,13 +148,13 @@ void FastHessian::getIpoints()
   ipts.clear();
 
   // Build the response map
-  // StartTimer(&timeAccumulator, RESPONSES);
+  StartTimer(&timeAccumulator, DET_CAL);
   buildResponseMap();
-  // EndTimer(&timeAccumulator, RESPONSES);
+  EndTimer(&timeAccumulator, DET_CAL);
 
   // Get the response layers
   ResponseLayer *b, *m, *t;
-  // StartTimer(&timeAccumulator, NMS);
+  StartTimer(&timeAccumulator, NMS);
   for (int o = 0; o < octaves; ++o) for (int i = 0; i <= 1; ++i)
   {
     b = responseMap.at(filter_map[o][i]);
@@ -167,12 +169,15 @@ void FastHessian::getIpoints()
       {
         if (isExtremum(r, c, t, m, b))
         {
-          interpolateExtremum(r, c, t, m, b);
+          Point ipt;
+          ipt.x = static_cast<float>(c * t->step);
+          ipt.y = static_cast<float>(r * t->step);
+          ipts.push_back(ipt);
         }
       }
     }
   }
-  // EndTimer(&timeAccumulator, NMS);
+  EndTimer(&timeAccumulator, NMS);
 }
 
 //-------------------------------------------------------
@@ -262,107 +267,3 @@ int FastHessian::isExtremum(int r, int c, ResponseLayer *t, ResponseLayer *m,
 
   return 1;
 }
-
-//-------------------------------------------------------
-
-//! Interpolate scale-space extrema to subpixel accuracy to form an image feature.   
-void FastHessian::interpolateExtremum(int r, int c, ResponseLayer *t, ResponseLayer *m, ResponseLayer *b)
-{
-  // get the step distance between filters
-  // check the middle filter is mid way between top and bottom
-  int filterStep = (m->filter - b->filter);
-  assert(filterStep > 0 && t->filter - m->filter == m->filter - b->filter);
- 
-  // Get the offsets to the actual location of the extremum
-  double xi = 0, xr = 0, xc = 0;
-  // interpolateStep(r, c, t, m, b, &xi, &xr, &xc );
-
-  // If point is sufficiently close to the actual extremum
-  if( fabs( xi ) < 0.5f  &&  fabs( xr ) < 0.5f  &&  fabs( xc ) < 0.5f )
-  {
-    Point ipt;
-    ipt.x = static_cast<float>((c + xc) * t->step);
-    ipt.y = static_cast<float>((r + xr) * t->step);
-    ipts.push_back(ipt);
-  }
-}
-
-//-------------------------------------------------------
-
-//! Performs one step of extremum interpolation. 
-void FastHessian::interpolateStep(int r, int c, ResponseLayer *t, ResponseLayer *m, ResponseLayer *b, 
-                                  double* xi, double* xr, double* xc )
-{
-  CvMat* dD, * H, * H_inv, X;
-  double x[3] = { 0 };
-
-  dD = deriv3D( r, c, t, m, b );
-  H = hessian3D( r, c, t, m, b );
-  H_inv = cvCreateMat( 3, 3, CV_64FC1 );
-  cvInvert( H, H_inv, CV_SVD );
-  cvInitMatHeader( &X, 3, 1, CV_64FC1, x, CV_AUTOSTEP );
-  cvGEMM( H_inv, dD, -1, NULL, 0, &X, 0 );
-
-  cvReleaseMat( &dD );
-  cvReleaseMat( &H );
-  cvReleaseMat( &H_inv );
-
-  *xi = x[2];
-  *xr = x[1];
-  *xc = x[0];
-}
-
-//-------------------------------------------------------
-
-//! Computes the partial derivatives in x, y, and scale of a pixel.
-CvMat* FastHessian::deriv3D(int r, int c, ResponseLayer *t, ResponseLayer *m, ResponseLayer *b)
-{
-  CvMat* dI;
-  double dx, dy, ds;
-
-  dx = (m->getResponse(r, c + 1, t) - m->getResponse(r, c - 1, t)) / 2.0;
-  dy = (m->getResponse(r + 1, c, t) - m->getResponse(r - 1, c, t)) / 2.0;
-  ds = (t->getResponse(r, c) - b->getResponse(r, c, t)) / 2.0;
-  
-  dI = cvCreateMat( 3, 1, CV_64FC1 );
-  cvmSet( dI, 0, 0, dx );
-  cvmSet( dI, 1, 0, dy );
-  cvmSet( dI, 2, 0, ds );
-
-  return dI;
-}
-
-//-------------------------------------------------------
-
-//! Computes the 3D Hessian matrix for a pixel.
-CvMat* FastHessian::hessian3D(int r, int c, ResponseLayer *t, ResponseLayer *m, ResponseLayer *b)
-{
-  CvMat* H;
-  double v, dxx, dyy, dss, dxy, dxs, dys;
-
-  v = m->getResponse(r, c, t);
-  dxx = m->getResponse(r, c + 1, t) + m->getResponse(r, c - 1, t) - 2 * v;
-  dyy = m->getResponse(r + 1, c, t) + m->getResponse(r - 1, c, t) - 2 * v;
-  dss = t->getResponse(r, c) + b->getResponse(r, c, t) - 2 * v;
-  dxy = ( m->getResponse(r + 1, c + 1, t) - m->getResponse(r + 1, c - 1, t) - 
-          m->getResponse(r - 1, c + 1, t) + m->getResponse(r - 1, c - 1, t) ) / 4.0;
-  dxs = ( t->getResponse(r, c + 1) - t->getResponse(r, c - 1) - 
-          b->getResponse(r, c + 1, t) + b->getResponse(r, c - 1, t) ) / 4.0;
-  dys = ( t->getResponse(r + 1, c) - t->getResponse(r - 1, c) - 
-          b->getResponse(r + 1, c, t) + b->getResponse(r - 1, c, t) ) / 4.0;
-
-  H = cvCreateMat( 3, 3, CV_64FC1 );
-  cvmSet( H, 0, 0, dxx );
-  cvmSet( H, 0, 1, dxy );
-  cvmSet( H, 0, 2, dxs );
-  cvmSet( H, 1, 0, dxy );
-  cvmSet( H, 1, 1, dyy );
-  cvmSet( H, 1, 2, dys );
-  cvmSet( H, 2, 0, dxs );
-  cvmSet( H, 2, 1, dys );
-  cvmSet( H, 2, 2, dss );
-
-  return H;
-}
-
-//-------------------------------------------------------
