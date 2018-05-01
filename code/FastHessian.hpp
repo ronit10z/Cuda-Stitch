@@ -1,7 +1,6 @@
 #pragma once
 
 #include <opencv/cv.h>
-#include "InterestPoint.hpp"
 #include "ResponseLayer.hpp"
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/highgui.hpp>

@@ -8,7 +8,6 @@
 #include <opencv2/opencv.hpp>
 
 #include <bitset>
-#include "InterestPoint.hpp"
 
 struct BriefPointDescriptor
 {
@@ -56,6 +55,6 @@ private:
 	
 };
 
-void FindMatches(vector<BriefPointDescriptor> &descripts1, 
-  vector<BriefPointDescriptor> &descripts2, vector<cv::Point> &points1,
-  vector<cv::Point> &points2);
+void FindMatches(std::vector<BriefPointDescriptor> &descripts1, 
+  std::vector<BriefPointDescriptor> &descripts2, std::vector<cv::Point> &points1,
+  std::vector<cv::Point> &points2);

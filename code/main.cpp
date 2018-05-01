@@ -22,7 +22,6 @@
 #include <thrust/device_malloc.h>
 #include <thrust/device_free.h>
 
-#include "InterestPoint.hpp"
 #include "ResponseLayer.hpp"
 #include "FastHessian.hpp"
 #include "Timer.hpp"
@@ -43,7 +42,6 @@ extern TimeAccumulator timeAccumulator;
 //-------------------------------------------------------
 
 static inline void GenerateIntegralImage(const Mat &source, Mat &integralImage_1);
-void drawIpoints(Mat img_1, vector<InterestPoint> &ipts);
 
 Mat createMask(Mat& im) {
     Mat mask = Mat::ones(im.size(), CV_8UC1);
@@ -389,17 +387,17 @@ inline int fRound(float flt)
 }
 
 //! Draw all the Ipoints in the provided vector
-void drawIpoints(Mat img_1, vector<InterestPoint> &ipts)
-{
-  InterestPoint *ipt;
-  int r1, c1;
+// void drawIpoints(Mat img_1, vector<InterestPoint> &ipts)
+// {
+//   InterestPoint *ipt;
+//   int r1, c1;
 
-  for(unsigned int i = 0; i < ipts.size(); i++) 
-  {
-    ipt = &ipts.at(i);
-    r1 = fRound(ipt->position.second);
-    c1 = fRound(ipt->position.first);
+//   for(unsigned int i = 0; i < ipts.size(); i++) 
+//   {
+//     ipt = &ipts.at(i);
+//     r1 = fRound(ipt->position.second);
+//     c1 = fRound(ipt->position.first);
 
-    circle(img_1, Point(c1,r1), 1, cvScalar(0, 255, 0),-1);
-  }
-}
+//     circle(img_1, Point(c1,r1), 1, cvScalar(0, 255, 0),-1);
+//   }
+// }
