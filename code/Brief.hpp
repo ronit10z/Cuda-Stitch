@@ -47,6 +47,7 @@ public:
 	int patchWidth;
 	int numBriefPairs;
 	FourTupleVector &briefPairs;
+	FourTupleVector *cudaBriefPairs;
 	
 private:
 	bool isValidPoint(const cv::Point &ipt, int width, int height);

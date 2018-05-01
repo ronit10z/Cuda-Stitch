@@ -2,6 +2,9 @@
 #include <climits>
 #include <cmath>
 
+#include <thrust/device_malloc.h>
+#include <thrust/device_free.h>
+
 #include "Brief.hpp"
 
 using namespace std;
@@ -69,12 +72,10 @@ int Brief::ReadFile(const char* filename)
 
   	}
 
+  cudaMalloc((void **)&cudaBriefPairs, sizeof(FourTupleVector) * this->numBriefPairs);
+  cudaMemcpy(this->cudaBriefPairs, &briefPairs, 
+    sizeof(FourTupleVector) * this->numBriefPairs, cudaMemcpyHostToDevice);
   return this->numBriefPairs;
-}
-
-inline bool isInBound(int r, int c, int h, int w) 
-{
-  return r >= 0 && r < h && c >= 0 && c < w;
 }
 
 //Determine if the point is within bounds
@@ -82,14 +83,14 @@ bool Brief::isValidPoint(const Point &ipt, int width, int height)
 {
   int col = (ipt.x);
   int row = (ipt.y);
-  // int dist = (this->patchWidth);
   int dist = 4;
+  bool inBoundLeftTop = (row - dist >= 0) && (row - dist < height) 
+              && (col - dist >= 0) && (col - dist < width);
+  bool inBoundRightBottom = (row + dist >= 0) && (row + dist < height) 
+              && (col + dist >= 0) && (col + dist < width);
 
-  return isInBound(row - dist, col - dist, height, width) && 
-    isInBound(row + dist, col + dist,height,width); 
+  return inBoundLeftTop && inBoundRightBottom;
 }
-
-
 
 // loops over all the points and calculates the descripter if the point is within bounds.
 void Brief::ComputeBriefDescriptor(const cv::Mat &img, std::vector<Point> &ipts, std::vector<BriefPointDescriptor> &desiciptorVector)

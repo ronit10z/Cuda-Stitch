@@ -15,15 +15,22 @@
 #include <cuda_runtime.h>
 #include <driver_functions.h>
 
+#include <thrust/copy.h>
+#include <thrust/host_vector.h>
+#include <thrust/device_vector.h>
+#include <thrust/device_ptr.h>
+#include <thrust/device_malloc.h>
+#include <thrust/device_free.h>
+
 #include "InterestPoint.hpp"
 #include "ResponseLayer.hpp"
 #include "FastHessian.hpp"
 #include "Timer.hpp"
 #include "Brief.hpp"
 
+using namespace std;
 using namespace cv;
 using namespace cv::xfeatures2d;  
-using namespace std;
 
 extern TimeAccumulator timeAccumulator;
 
@@ -132,8 +139,9 @@ int main(int argc, char const *argv[])
 {
   // TODO: change filename to command line arguement, have assert or 
   // exit if argc is not enough.
-  const char* videoName1 = "../../videos/CICL.MOV";
-  const char* videoName2 = "../../videos/CICR.MOV";
+  setupCudaDevice();
+  const char* videoName1 = "../../videos/HHL.MOV";
+  const char* videoName2 = "../../videos/HHR.MOV";
 
   VideoCapture capture_1(videoName1);
   VideoCapture capture_2(videoName2);
@@ -150,8 +158,6 @@ int main(int argc, char const *argv[])
   int frames_per_second = 30;
   VideoWriter oVideoWriter("../../videos/outcpp.avi", VideoWriter::fourcc('M', 'J', 'P', 'G'), 
                                                                 frames_per_second, frame_size, true);
-  // Mat oldHomography;
-
   SetupTimer(&timeAccumulator);
   StartTimer(&timeAccumulator, TOTAL_TIME);
   int frames = 0;
@@ -162,12 +168,10 @@ int main(int argc, char const *argv[])
   Mat oldHomography;
   bool isFirstRun = true;
 
-  capture_1 >> img_1;
+  capture_1 >> img_1; 
   capture_2 >> img_2;
-  frames++;
-    // Declare Ipoints and other stuff
 
-  // // Open image and conver to grey scale-space
+  // FIRST RUN BS
   StartTimer(&timeAccumulator, IMAGE_IO);
   resize(img_1, img_1, Size(img_1.cols * DIM_RATIO, img_1.rows * DIM_RATIO));
   Mat gray8_1(img_1.size(), CV_8U, 1);
@@ -176,7 +180,6 @@ int main(int argc, char const *argv[])
   gray8_1.convertTo(gray32_1, CV_32F, 1.0/255.0, 0);
   img_1.convertTo(img_1, CV_32FC3);
   img_1 /= 255.0;
-
   resize(img_2, img_2, Size(img_2.cols * DIM_RATIO, img_2.rows * DIM_RATIO));
   Mat gray8_2(img_2.size(), CV_8U, 1);
   Mat gray32_2(img_2.size(), CV_32F, 1);
@@ -184,44 +187,36 @@ int main(int argc, char const *argv[])
   gray8_2.convertTo(gray32_2, CV_32F, 1.0/255.0, 0);
   img_2.convertTo(img_2, CV_32FC3);
   img_2 /= 255.0;
-
   EndTimer(&timeAccumulator, IMAGE_IO);
-
-  // // Compute Summed table representation of image
   StartTimer(&timeAccumulator, SUMMED_TABLE);
-
   Mat integralImage_1(img_1.size(), CV_32F, 1);
   GenerateIntegralImage(gray32_1, integralImage_1);
-
   Mat integralImage_2(img_2.size(), CV_32F, 1);
   GenerateIntegralImage(gray32_2, integralImage_2);
   EndTimer(&timeAccumulator, SUMMED_TABLE);
-
-
-
   std::vector<Point> interestPoints1;
   FastHessian fh_1(integralImage_1, gray32_1, interestPoints1, 5, 4, SAMPLING_RATE, 0.00004f);
-    
   std::vector<Point> interestPoints2;
   FastHessian fh_2(integralImage_2, gray32_2, interestPoints2, 5, 4, SAMPLING_RATE, 0.00004f);
-    
+  // END FIRST RUN BS
 
   vector<cv::Point>points_1;
   vector<cv::Point>points_2;
-
-
   vector<BriefPointDescriptor> descriptorVector1;
   vector<BriefPointDescriptor> descriptorVector2;
+
+  cv::cuda::GpuMat gpuImg_1;
+  cv::cuda::GpuMat gpuImg_2;
+
   while (1) 
   {
+    StartTimer(&timeAccumulator, IMAGE_IO);
+    
     capture_1 >> img_1;
     capture_2 >> img_2;
     if(img_1.empty() || img_2.empty()) break;
     frames++;
-    // Declare Ipoints and other stuff
 
-    // // Open image and conver to grey scale-space
-    StartTimer(&timeAccumulator, IMAGE_IO);
     resize(img_1, img_1, Size(img_1.cols * DIM_RATIO, img_1.rows * DIM_RATIO));
     Mat gray8_1(img_1.size(), CV_8U, 1);
     Mat gray32_1(img_1.size(), CV_32F, 1);
@@ -237,44 +232,35 @@ int main(int argc, char const *argv[])
     gray8_2.convertTo(gray32_2, CV_32F, 1.0/255.0, 0);
     img_2.convertTo(img_2, CV_32FC3);
     img_2 /= 255.0;
-
     EndTimer(&timeAccumulator, IMAGE_IO);
 
     // // Compute Summed table representation of image
     StartTimer(&timeAccumulator, SUMMED_TABLE);
-
     Mat integralImage_1(img_1.size(), CV_32F, 1);
     GenerateIntegralImage(gray32_1, integralImage_1);
-
     Mat integralImage_2(img_2.size(), CV_32F, 1);
     GenerateIntegralImage(gray32_2, integralImage_2);
     EndTimer(&timeAccumulator, SUMMED_TABLE);
 
+    gpuImg_1.upload(integralImage_1);
+    gpuImg_2.upload(integralImage_2);
+
     // Compute Interest Points from summed table representation
     StartTimer(&timeAccumulator, INTEREST_POINT_DETECTION);
-
     fh_1.SetImage(integralImage_1, gray32_1);
     fh_1.getIpoints();
-
     fh_2.SetImage(integralImage_2, gray32_2);
     fh_2.getIpoints();
-
     EndTimer(&timeAccumulator, INTEREST_POINT_DETECTION);
 
-    StartTimer(&timeAccumulator, DESCRIPTOR_EXTRACTION);
-    // Compute Brief Descriptor based off interest points, images are greyscale, CV_32F
-    
+    StartTimer(&timeAccumulator, DESCRIPTOR_EXTRACTION);    
     briefDescriptor.ComputeBriefDescriptor(gray32_1, interestPoints1, descriptorVector1);
     briefDescriptor.ComputeBriefDescriptor(gray32_2, interestPoints2, descriptorVector2);
-
     EndTimer(&timeAccumulator, DESCRIPTOR_EXTRACTION);
 
     StartTimer(&timeAccumulator, DESCRIPTOR_MATCHING);
-    // Match Interest Points
     FindMatches(descriptorVector1, descriptorVector2, points_1, points_2);
-
     EndTimer(&timeAccumulator, DESCRIPTOR_MATCHING);
-
 
     StartTimer(&timeAccumulator, OPENCV_ROUTINES);
 
@@ -291,13 +277,8 @@ int main(int argc, char const *argv[])
     homographyMat_2 = (HOMOGRAPHY_RATIO) * oldHomography + (1 - HOMOGRAPHY_RATIO) * homographyMat_2;
     oldHomography = homographyMat_2;
 
-
-    EndTimer(&timeAccumulator, OPENCV_ROUTINES);
-
-
     for (int i = 0; i < FRAMES_PER_HOMOGRAPHY; ++i)
     {
-      StartTimer(&timeAccumulator, OPENCV_ROUTINES);
 
       double xMin = INT_MAX; 
       double yMin = INT_MAX;
@@ -349,12 +330,7 @@ int main(int argc, char const *argv[])
       Mat resizedPan;
       resize(panorama, resizedPan, frame_size);
 
-      EndTimer(&timeAccumulator, OPENCV_ROUTINES);
       oVideoWriter.write(resizedPan);
-
-      // img_1.release();
-      // img_2.release();
-      // panorama.release();
 
       if (i != FRAMES_PER_HOMOGRAPHY - 1)
       {
@@ -370,7 +346,8 @@ int main(int argc, char const *argv[])
         img_2 /= 255.0;
       }
     }
-    // printf("times\n");
+    EndTimer(&timeAccumulator, OPENCV_ROUTINES);
+
   }
 
   EndTimer(&timeAccumulator, TOTAL_TIME);
