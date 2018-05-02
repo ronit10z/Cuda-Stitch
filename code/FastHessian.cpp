@@ -206,8 +206,10 @@ void FastHessian::buildResponseLayer(ResponseLayer *rl)
   float inverse_area = 1.f/(w*w);           // normalisation factor
   float Dxx, Dyy, Dxy;
 
-  for(int r, c, ar = 0, index = 0; ar < rl->height; ++ar) 
+  for(int ar = 0, index = 0; ar < rl->height; ++ar) 
   {
+    int r = 0;
+    int c = 0;
     for(int ac = 0; ac < rl->width; ++ac, index++) 
     {
       // get the image coordinates
