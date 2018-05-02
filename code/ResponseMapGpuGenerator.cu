@@ -18,14 +18,10 @@ inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=t
    }
 }
 
-__constant__ int lobeSizesPrecomputed__CUDA[10];
-
-
-
-void LaunchKernel(dim3 gridDimensions, dim3 blockDimensions, float* gpuIntegralImage, float* determinants, int width ,int height, 
+void LaunchKernel(dim3 gridDimensions, dim3 blockDimensions, int* lobeSizesPrecomputed__CUDA, float* gpuIntegralImage, float* determinants, int width ,int height, 
 		int numIntervals, int octaveNum, int stepSize, int borderOffset)
 {
-	GetResponses__CUDA <<<gridDimensions, blockDimensions>>> (gpuIntegralImage, determinants, width, height, numIntervals, octaveNum, stepSize, borderOffset);
+	GetResponses__CUDA <<<gridDimensions, blockDimensions>>> (lobeSizesPrecomputed__CUDA, gpuIntegralImage, determinants, width, height, numIntervals, octaveNum, stepSize, borderOffset);
 	gpuErrchk(cudaPeekAtLastError());
 	gpuErrchk(cudaDeviceSynchronize());
 }
@@ -49,7 +45,7 @@ __device__ inline float BoxIntegral__CUDA(float* integralImage, int width, int h
   return max(0.f, A - B - C + D);
 }
 
-__global__ void GetResponses__CUDA(float* integralImage, float* determinants, int width ,int height, 
+__global__ void GetResponses__CUDA(int* lobeSizesPrecomputed__CUDA, float* integralImage, float* determinants, int width ,int height, 
 		int numIntervals, int octaveNum, int stepSize, int borderOffset)
 
 {
@@ -57,7 +53,7 @@ __global__ void GetResponses__CUDA(float* integralImage, float* determinants, in
 	// need to mul by step size to take downsampling into account
 	integralImageRow *= stepSize;
 	// outside border is all zero. MAGA
-	integralImageRow += borderOffset;
+	// integralImageRow += borderOffset;
 
 	// need to know the size in block that corresponds to one intervals worth 
 	int blocksPerInterval_x = gridDim.x / numIntervals;
@@ -65,7 +61,7 @@ __global__ void GetResponses__CUDA(float* integralImage, float* determinants, in
 	integralImageCol *= blockDim.x; // getting down to thread idx
 	integralImageCol += threadIdx.x;
 	integralImageCol *= stepSize;
-	integralImageCol += borderOffset;
+	// integralImageCol += borderOffset;
 
 	if (integralImageCol >= width - borderOffset || integralImageRow >= height - borderOffset) return;
 
@@ -79,9 +75,10 @@ __global__ void GetResponses__CUDA(float* integralImage, float* determinants, in
 	// filter construction
 
 	// Terminology borrowed from original SURF paper.
-	const int lobeSize = lobeSizesPrecomputed__CUDA[octaveNum * numIntervals + lobeSizesPrecomputedOffset];
+	// const int lobeSize = lobeSizesPrecomputed__CUDA[octaveNum * numIntervals + lobeSizesPrecomputedOffset];
+	const int lobeSize = lobeSizesPrecomputed__CUDA[octaveNum * numIntervals + lobeSizesPrecomputedOffset];;
 	const int filterSize = lobeSize * 3;
-	const int borderSize = filterSize / 2;
+	const int borderSize = filterSize / 2 + 1;
 
 	// Filter responses to be used in approximated determinant.  Taken from original SURF paper.
 	float Dxx = BoxIntegral__CUDA(integralImage, width, height, integralImageRow - lobeSize + 1, integralImageCol - borderSize, 2*lobeSize - 1, filterSize)
@@ -108,14 +105,18 @@ __global__ void GetResponses__CUDA(float* integralImage, float* determinants, in
   unsigned int interval_start_index = computed_interval * width * height;
   unsigned int determinant_pixel_index = interval_start_index + (integralImageRow * width + integralImageCol);
 
-
-  // uint64_t numIntervalSlots = 4 + ((4 - 1) * 4 / 2);
-  // uint64_t gpuDeterminantSize = numIntervalSlots * 288 * 512;
-	// if (blockIdx.x == 0 && blockIdx.y == 0 && threadIdx.x ==0 && threadIdx.y ==0) printf("in kernel = %d %d\n",height, width );
-  // if (determinant_pixel_index >= gpuDeterminantSize) 
+  // if (blockIdx.x == 0 && blockIdx.y == 0 && threadIdx.x == 0 && threadIdx.y == 0)
   // {
-  // 	printf("%u %u %u %u %u\n",computed_interval, interval_start_index, determinant_pixel_index, numIntervals, octaveNum );
+  // 	// printf("det=%f idx=%d  interval=%d intervalStart=%d width=%d row=%d col=%d\n", determinant, determinant_pixel_index, computed_interval, interval_start_index, width, integralImageRow,  integralImageCol);
+  // 	printf("%f r=%d c=%d b=%d l=%d w=%d\n", determinant, integralImageRow, integralImageCol, borderSize, lobeSizesPrecomputed__CUDA[0], filterSize);
   // 	asm("trap;");
+  	
+  // }
+
+  // printf("%d\n", stepSize);
+  // if (determinant_pixel_index % 2 ==1)
+  // {
+  // 	printf("%d\n", determinant_pixel_index);
   // }
   determinants[determinant_pixel_index] = determinant;
 }	

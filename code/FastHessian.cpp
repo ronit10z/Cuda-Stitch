@@ -139,8 +139,11 @@ FastHessian::FastHessian(Mat &integralImage, Mat &img, std::vector<cv::Point> &i
 
   uint64_t numIntervalSlots = this->intervals + ((this->octaves - 1) * this->intervals / 2);
   this->gpuDeterminantSize = numIntervalSlots * i_width * i_height * sizeof(float);
-  cudaMalloc((void**)&(this->gpuDeterminants), this->gpuDeterminantSize);
-  cudaMemset(this->gpuDeterminants, 0, this->gpuDeterminantSize);
+  gpuErrchk(cudaMalloc((void**)&(this->gpuDeterminants), this->gpuDeterminantSize));
+  gpuErrchk(cudaMemset(this->gpuDeterminants, 0, this->gpuDeterminantSize));
+
+  gpuErrchk(cudaMalloc((void**) &lobeSizesPrecomputed__CUDA, 10*sizeof(int)));
+  gpuErrchk(cudaMemcpy(lobeSizesPrecomputed__CUDA, lobeSizesPrecomputed, 10 * sizeof(int), cudaMemcpyHostToDevice));
 
   gpuErrchk(cudaDeviceSynchronize());
 }
@@ -217,14 +220,14 @@ void FastHessian::buildResponseMap()
   // Extract responses from the image
   for (unsigned int i = 0; i < responseMap.size(); ++i)
   {
-    buildResponseLayer(responseMap[i]);
+    buildResponseLayer(responseMap[i], i);
   }
 }
 
 //-------------------------------------------------------
 
 //! Calculate DoH responses for supplied layer
-void FastHessian::buildResponseLayer(ResponseLayer *rl)
+void FastHessian::buildResponseLayer(ResponseLayer *rl, int responseIndex)
 {
   float *responses = rl->responses;         // response storage
 
@@ -262,9 +265,18 @@ void FastHessian::buildResponseLayer(ResponseLayer *rl)
       Dxy *= inverse_area;
      
       // Get the determinant of hessian response & laplacian sign
+      // if (index == 0 && responseIndex == 0)
+      // {
+      //   printf("%f r=%d c=%d b=%d l=%d w=%d\n", (Dxx * Dyy - 0.81f * Dxy * Dxy), r, c, b, l ,w);
+      // }
+      // if (Dxx * Dyy - 0.81f * Dxy * Dxy > 0.00001)
+      // {
+      //   printf("%d %f\n", index, Dxx * Dyy - 0.81f * Dxy * Dxy );
+      // }
       responses[index++] = (Dxx * Dyy - 0.81f * Dxy * Dxy);
     }
   }
+  // exit(1);
 }
 
 void FastHessian::buildResponseLayer__CUDA()
@@ -285,7 +297,7 @@ void FastHessian::buildResponseLayer__CUDA()
     int actualIntervals = (i == 0) ? 4 : 2;
     gridDimensions.x *= actualIntervals;
 
-    LaunchKernel(gridDimensions, blockDimensions, this->gpuIntegralImage, this->gpuDeterminants, this->integralImage.cols, 
+    LaunchKernel(gridDimensions, blockDimensions, lobeSizesPrecomputed__CUDA, this->gpuIntegralImage, this->gpuDeterminants, this->integralImage.cols, 
       this->integralImage.rows, actualIntervals, i, currentStep, borderOffset);
 
     currentStep *= 2;

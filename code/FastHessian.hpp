@@ -35,6 +35,10 @@ class FastHessian {
 	void setGpuIntegralImage(float* integralImage);
 	
 	float* gpuIntegralImage;
+	uint64_t gpuDeterminantSize;
+	float* gpuDeterminants;
+	std::vector<ResponseLayer *> responseMap;
+	int* lobeSizesPrecomputed__CUDA;
   private:
 
 	//---------------- Private Functions -----------------//
@@ -43,7 +47,7 @@ class FastHessian {
 	void buildResponseMap();
 
 	//! Calculate DoH responses for supplied layer
-	void buildResponseLayer(ResponseLayer *r);
+	void buildResponseLayer(ResponseLayer *r, int responseIndex);
 
 	//! 3x3x3 Extrema test
 	int isExtremum(int r, int c, ResponseLayer *t, ResponseLayer *m, ResponseLayer *b);    
@@ -63,7 +67,6 @@ class FastHessian {
 
 	std::vector<cv::Point> &ipts;
 
-	std::vector<ResponseLayer *> responseMap;
 
 	int octaves;
 
@@ -72,6 +75,4 @@ class FastHessian {
 	int init_sample;
 
 	float thresh;
-	float* gpuDeterminants;
-	uint64_t gpuDeterminantSize;
 };

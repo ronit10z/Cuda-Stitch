@@ -206,9 +206,9 @@ int main(int argc, char const *argv[])
   GenerateIntegralImage(gray32_2, integralImage_2);
   EndTimer(&timeAccumulator, SUMMED_TABLE);
   std::vector<Point> interestPoints1;
-  FastHessian fh_1(integralImage_1, gray32_1, interestPoints1, 4, 4, SAMPLING_RATE, 0.00004f);
+  FastHessian fh_1(integralImage_1, gray32_1, interestPoints1, 1, 4, SAMPLING_RATE, 0.00004f);
   std::vector<Point> interestPoints2;
-  FastHessian fh_2(integralImage_2, gray32_2, interestPoints2, 4, 4, SAMPLING_RATE, 0.00004f);
+  FastHessian fh_2(integralImage_2, gray32_2, interestPoints2, 1, 4, SAMPLING_RATE, 0.00004f);
   // END FIRST RUN BS
 
   vector<cv::Point>points_1;
@@ -218,6 +218,8 @@ int main(int argc, char const *argv[])
 
   gpuErrchk(cudaMalloc((void**)&fh_1.gpuIntegralImage, sizeof(float) * img_1.rows * img_1.cols));
   gpuErrchk(cudaMalloc((void**)&fh_2.gpuIntegralImage, sizeof(float) * img_2.rows * img_2.cols));
+  float* hostDeterminants = (float*)malloc(fh_1.gpuDeterminantSize);
+
   gpuErrchk(cudaDeviceSynchronize());
 
   while (1) 
@@ -262,18 +264,29 @@ int main(int argc, char const *argv[])
     gpuErrchk(cudaMemcpy(fh_2.gpuIntegralImage, integralPointer_2, 
       sizeof(float) * integralImage_2.rows * integralImage_2.cols, cudaMemcpyHostToDevice));
     gpuErrchk(cudaDeviceSynchronize());
-    fh_1.buildResponseLayer__CUDA();
-    gpuErrchk(cudaDeviceSynchronize());
-
-
     
     // Compute Interest Points from summed table representation
     StartTimer(&timeAccumulator, INTEREST_POINT_DETECTION);
     fh_1.SetImage(integralImage_1, gray32_1);
     fh_1.getIpoints();
-    fh_2.SetImage(integralImage_2, gray32_2);
-    fh_2.getIpoints();
+    fh_1.buildResponseLayer__CUDA();
+    gpuErrchk(cudaDeviceSynchronize());
+    
+    cudaMemcpy(hostDeterminants, fh_1.gpuDeterminants, fh_1.gpuDeterminantSize, cudaMemcpyDeviceToHost);
+    gpuErrchk(cudaDeviceSynchronize());
+    // fh_2.SetImage(integralImage_2, gray32_2);
+    // fh_2.getIpoints();
     EndTimer(&timeAccumulator, INTEREST_POINT_DETECTION);
+
+
+      for (int i = 0; i < integralImage_1.rows * integralImage_1.cols; ++i)
+      {
+        // printf("%f %f\n", fh_1.responseMap[1]->responses[i], hostDeterminants[i + integralImage_1.rows*integralImage_1.cols]);
+
+        // printf("%f \n", fh_1.responseMap[1]->responses[i]);
+        printf("%f \n", hostDeterminants[i + (integralImage_1.rows*integralImage_1.cols) * 1]);
+      }
+    exit(1);   
 
     StartTimer(&timeAccumulator, DESCRIPTOR_EXTRACTION);    
     briefDescriptor.ComputeBriefDescriptor(gray32_1, interestPoints1, descriptorVector1);
