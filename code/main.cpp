@@ -206,9 +206,9 @@ int main(int argc, char const *argv[])
   GenerateIntegralImage(gray32_2, integralImage_2);
   EndTimer(&timeAccumulator, SUMMED_TABLE);
   std::vector<Point> interestPoints1;
-  FastHessian fh_1(integralImage_1, gray32_1, interestPoints1, 5, 4, SAMPLING_RATE, 0.00004f);
+  FastHessian fh_1(integralImage_1, gray32_1, interestPoints1, 4, 4, SAMPLING_RATE, 0.00004f);
   std::vector<Point> interestPoints2;
-  FastHessian fh_2(integralImage_2, gray32_2, interestPoints2, 5, 4, SAMPLING_RATE, 0.00004f);
+  FastHessian fh_2(integralImage_2, gray32_2, interestPoints2, 4, 4, SAMPLING_RATE, 0.00004f);
   // END FIRST RUN BS
 
   vector<cv::Point>points_1;
@@ -216,10 +216,9 @@ int main(int argc, char const *argv[])
   vector<BriefPointDescriptor> descriptorVector1;
   vector<BriefPointDescriptor> descriptorVector2;
 
-  float* gpuIntegralImage_1;
-  float* gpuIntegralImage_2;
-  gpuErrchk(cudaMalloc((void**)&gpuIntegralImage_1, sizeof(float) * img_1.rows * img_1.cols));
-  gpuErrchk(cudaMalloc((void**)&gpuIntegralImage_2, sizeof(float) * img_2.rows * img_2.cols));
+  gpuErrchk(cudaMalloc((void**)&fh_1.gpuIntegralImage, sizeof(float) * img_1.rows * img_1.cols));
+  gpuErrchk(cudaMalloc((void**)&fh_2.gpuIntegralImage, sizeof(float) * img_2.rows * img_2.cols));
+  gpuErrchk(cudaDeviceSynchronize());
 
   while (1) 
   {
@@ -258,12 +257,16 @@ int main(int argc, char const *argv[])
     float* integralPointer_1 = (float*)(integralImage_1.data);
     float* integralPointer_2 = (float*)(integralImage_2.data);
 
-    gpuErrchk(cudaMemcpy(gpuIntegralImage_1, integralPointer_1, 
+    gpuErrchk(cudaMemcpy(fh_1.gpuIntegralImage, integralPointer_1, 
       sizeof(float) * integralImage_1.rows * integralImage_1.cols, cudaMemcpyHostToDevice));
-
-    gpuErrchk(cudaMemcpy(gpuIntegralImage_2, integralPointer_2, 
+    gpuErrchk(cudaMemcpy(fh_2.gpuIntegralImage, integralPointer_2, 
       sizeof(float) * integralImage_2.rows * integralImage_2.cols, cudaMemcpyHostToDevice));
+    gpuErrchk(cudaDeviceSynchronize());
+    fh_1.buildResponseLayer__CUDA();
+    gpuErrchk(cudaDeviceSynchronize());
 
+
+    
     // Compute Interest Points from summed table representation
     StartTimer(&timeAccumulator, INTEREST_POINT_DETECTION);
     fh_1.SetImage(integralImage_1, gray32_1);

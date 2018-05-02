@@ -18,7 +18,18 @@ using namespace std;
 #define BLOCKDIM_X 16
 #define BLOCKDIM_Y 8
 
-#define CUDA_CHECK_CALL(x) __cudaCheckMsg(x, __FILE__, __LINE__)
+#define CUDA_ERROR_CHECK
+
+#define gpuErrchk(ans) { gpuAssert((ans), __FILE__, __LINE__); }
+inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=true)
+{
+   if (code != cudaSuccess) 
+   {
+      fprintf(stderr,"GPUassert: %s %s %d\n", cudaGetErrorString(code), file, line);
+      if (abort) exit(code);
+   }
+}
+
 
 void FastHessian::setGpuIntegralImage(float* integralImage)
 {
@@ -126,10 +137,12 @@ FastHessian::FastHessian(Mat &integralImage, Mat &img, std::vector<cv::Point> &i
     responseMap.push_back(new ResponseLayer(w/16, h/16, s*16, 387));
   }
 
-  uint64_t numIntervalSlots = intervals + ((octaves - 1) * (intervals / 2));
-  this->gpuDeterminantSize = numIntervalSlots * i_width * i_height *sizeof(float);
+  uint64_t numIntervalSlots = this->intervals + ((this->octaves - 1) * this->intervals / 2);
+  this->gpuDeterminantSize = numIntervalSlots * i_width * i_height * sizeof(float);
   cudaMalloc((void**)&(this->gpuDeterminants), this->gpuDeterminantSize);
   cudaMemset(this->gpuDeterminants, 0, this->gpuDeterminantSize);
+
+  gpuErrchk(cudaDeviceSynchronize());
 }
 
 
@@ -222,11 +235,12 @@ void FastHessian::buildResponseLayer(ResponseLayer *rl)
   float inverse_area = 1.f/(w*w);           // normalisation factor
   float Dxx, Dyy, Dxy;
 
-  for(int ar = 0, index = 0; ar < rl->height; ++ar) 
+  int index = 0;
+  for(int ar = 0, index = 0; ar < rl->height; ar++) 
   {
     int r = 0;
     int c = 0;
-    for(int ac = 0; ac < rl->width; ++ac, index++) 
+    for(int ac = 0; ac < rl->width; ac++) 
     {
       // get the image coordinates
       r = ar * step;
@@ -248,7 +262,7 @@ void FastHessian::buildResponseLayer(ResponseLayer *rl)
       Dxy *= inverse_area;
      
       // Get the determinant of hessian response & laplacian sign
-      responses[index] = (Dxx * Dyy - 0.81f * Dxy * Dxy);
+      responses[index++] = (Dxx * Dyy - 0.81f * Dxy * Dxy);
     }
   }
 }
@@ -260,31 +274,19 @@ void FastHessian::buildResponseLayer__CUDA()
   for (int i = 0; i < this->octaves; ++i)
   {
     int borderOffset = borderSizesPrecomputed[i];
-    int numFilterApplications_x;
-    int numFilterApplications_y;
     // dim3 gridDimensions;
-    numFilterApplications_x = this->integralImage.cols - (2 * borderOffset + this->init_sample - 1) / this->init_sample;
-    numFilterApplications_y = this->integralImage.rows - (2 * borderOffset + this->init_sample - 1) / this->init_sample;  
+    unsigned int numFilterApplications_x = (this->integralImage.cols - (2 * borderOffset) + currentStep - 1) / currentStep;
+    unsigned int numFilterApplications_y = (this->integralImage.rows - (2 * borderOffset) + currentStep - 1) / currentStep;  
     unsigned int gridDimension_x = (numFilterApplications_x + BLOCKDIM_X - 1) / BLOCKDIM_X;
     unsigned int gridDimension_y = (numFilterApplications_y + BLOCKDIM_Y - 1) / BLOCKDIM_Y;
     dim3 gridDimensions(gridDimension_x, gridDimension_y);
     dim3 blockDimensions(BLOCKDIM_X, BLOCKDIM_Y);
+   
+    int actualIntervals = (i == 0) ? 4 : 2;
+    gridDimensions.x *= actualIntervals;
 
-
-    if (i == 0)
-    {
-      //octave 0 computes for 4 intervals at once, so expand the x dimension by 4x
-      gridDimensions.x *= 4;
-    }
-
-    else
-    {
-      //octaves > 0 computes for 2 intervals at once, so expand the x dimension by 2x
-      gridDimensions.x *= 2;
-    }
-
-    LaunchKernel(gridDimensions, blockDimensions, this->gpuIntegralImage, NULL, this->integralImage.cols, 
-      this->integralImage.rows, intervals, i, currentStep, borderOffset);
+    LaunchKernel(gridDimensions, blockDimensions, this->gpuIntegralImage, this->gpuDeterminants, this->integralImage.cols, 
+      this->integralImage.rows, actualIntervals, i, currentStep, borderOffset);
 
     currentStep *= 2;
   }

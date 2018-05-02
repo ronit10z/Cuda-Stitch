@@ -1,11 +1,33 @@
+#include <ctime>
+#include <iostream>
+#include <chrono>
+#include <bitset>
+
 #include "ResponseMapGpuGenerator.cu_incl"
 
+
+#define CUDA_ERROR_CHECK
+
+#define gpuErrchk(ans) { gpuAssert((ans), __FILE__, __LINE__); }
+inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=true)
+{
+   if (code != cudaSuccess) 
+   {
+      fprintf(stderr,"GPUassert: %s %s %d\n", cudaGetErrorString(code), file, line);
+      if (abort) exit(code);
+   }
+}
+
 __constant__ int lobeSizesPrecomputed__CUDA[10];
+
+
 
 void LaunchKernel(dim3 gridDimensions, dim3 blockDimensions, float* gpuIntegralImage, float* determinants, int width ,int height, 
 		int numIntervals, int octaveNum, int stepSize, int borderOffset)
 {
 	GetResponses__CUDA <<<gridDimensions, blockDimensions>>> (gpuIntegralImage, determinants, width, height, numIntervals, octaveNum, stepSize, borderOffset);
+	gpuErrchk(cudaPeekAtLastError());
+	gpuErrchk(cudaDeviceSynchronize());
 }
 
 
@@ -45,6 +67,8 @@ __global__ void GetResponses__CUDA(float* integralImage, float* determinants, in
 	integralImageCol *= stepSize;
 	integralImageCol += borderOffset;
 
+	if (integralImageCol >= width - borderOffset || integralImageRow >= height - borderOffset) return;
+
 	int lobeSizesPrecomputedOffset = blockIdx.x / blocksPerInterval_x;
 	// taking advantage of redundant work, octaves after 0 can skip first two integrals
 	// but the first one has to compute all 4 :(
@@ -79,8 +103,19 @@ __global__ void GetResponses__CUDA(float* integralImage, float* determinants, in
 
   //because we compute multiple intervals worth of responses per kernel launch, determine which interval we're currently on
   //value will be between 0 and 3 for octave 0, and either 0 or 1 for octaves > 0
+
   unsigned int computed_interval = octaveNum * numIntervals + lobeSizesPrecomputedOffset;
   unsigned int interval_start_index = computed_interval * width * height;
   unsigned int determinant_pixel_index = interval_start_index + (integralImageRow * width + integralImageCol);
+
+
+  // uint64_t numIntervalSlots = 4 + ((4 - 1) * 4 / 2);
+  // uint64_t gpuDeterminantSize = numIntervalSlots * 288 * 512;
+	// if (blockIdx.x == 0 && blockIdx.y == 0 && threadIdx.x ==0 && threadIdx.y ==0) printf("in kernel = %d %d\n",height, width );
+  // if (determinant_pixel_index >= gpuDeterminantSize) 
+  // {
+  // 	printf("%u %u %u %u %u\n",computed_interval, interval_start_index, determinant_pixel_index, numIntervals, octaveNum );
+  // 	asm("trap;");
+  // }
   determinants[determinant_pixel_index] = determinant;
-}
+}	

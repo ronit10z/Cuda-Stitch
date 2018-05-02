@@ -31,7 +31,10 @@ class FastHessian {
 
 	void SetImage(Mat &integralImage, Mat &img);
 	void getIpoints();
+	void buildResponseLayer__CUDA();
+	void setGpuIntegralImage(float* integralImage);
 	
+	float* gpuIntegralImage;
   private:
 
 	//---------------- Private Functions -----------------//
@@ -51,8 +54,6 @@ class FastHessian {
 						  double* xi, double* xr, double* xc );
 	CvMat* deriv3D(int r, int c, ResponseLayer *t, ResponseLayer *m, ResponseLayer *b);
 	CvMat* hessian3D(int r, int c, ResponseLayer *t, ResponseLayer *m, ResponseLayer *b);
-	void setGpuIntegralImage(float* integralImage);
-	void buildResponseLayer__CUDA();
 
 	//---------------- Private Variables -----------------//
 
@@ -71,7 +72,6 @@ class FastHessian {
 	int init_sample;
 
 	float thresh;
-	float* gpuIntegralImage;
 	float* gpuDeterminants;
 	uint64_t gpuDeterminantSize;
 };
