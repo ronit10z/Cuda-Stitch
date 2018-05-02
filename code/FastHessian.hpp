@@ -15,6 +15,9 @@ static const int INTERVALS = 4;
 static const float THRES = 0.0004f;
 static const int INIT_SAMPLE = 2;
 
+static const int lobeSizesPrecomputed[] = {3, 5, 7, 9, 13, 17, 25, 33, 49, 65};
+static const int borderSizesPrecomputed[] = {14, 26, 50, 98};
+
 
 class FastHessian {
   
@@ -48,6 +51,8 @@ class FastHessian {
 						  double* xi, double* xr, double* xc );
 	CvMat* deriv3D(int r, int c, ResponseLayer *t, ResponseLayer *m, ResponseLayer *b);
 	CvMat* hessian3D(int r, int c, ResponseLayer *t, ResponseLayer *m, ResponseLayer *b);
+	void setGpuIntegralImage(float* integralImage);
+	void buildResponseLayer__CUDA();
 
 	//---------------- Private Variables -----------------//
 
@@ -66,4 +71,7 @@ class FastHessian {
 	int init_sample;
 
 	float thresh;
+	float* gpuIntegralImage;
+	float* gpuDeterminants;
+	uint64_t gpuDeterminantSize;
 };

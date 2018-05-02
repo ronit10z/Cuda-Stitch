@@ -1,0 +1,10 @@
+#include <cuda.h>
+#include <cuda_runtime.h>
+#include <driver_functions.h>
+
+__device__ inline float BoxIntegral__CUDA(float* integralImage, int width, int height, int widthStep, int row, int col, int rows, int cols);
+__global__ void GetResponses__CUDA(float* integralImage, float* determinants, int width ,int height, 
+		int numIntervals, int octaveNum, int stepSize, int borderOffset);
+
+void LaunchKernel(dim3 gridDimensions, dim3 blockDimensions, float* gpuIntegralImage, float* determinants, int width ,int height, 
+		int numIntervals, int octaveNum, int stepSize, int borderOffset);

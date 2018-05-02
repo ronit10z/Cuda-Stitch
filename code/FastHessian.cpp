@@ -2,6 +2,8 @@
 #include <assert.h>
 
 #include "FastHessian.hpp"
+#include "ResponseMapGpuGenerator.cu_incl"
+
 
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/highgui.hpp>
@@ -13,7 +15,16 @@ extern TimeAccumulator timeAccumulator;
 
 using namespace std;
 
+#define BLOCKDIM_X 16
+#define BLOCKDIM_Y 8
+
 #define CUDA_CHECK_CALL(x) __cudaCheckMsg(x, __FILE__, __LINE__)
+
+void FastHessian::setGpuIntegralImage(float* integralImage)
+{
+  this->gpuIntegralImage = integralImage;
+}
+
 
 inline float BoxIntegral(Mat img, int row, int col, int rows, int cols) 
 {
@@ -114,6 +125,11 @@ FastHessian::FastHessian(Mat &integralImage, Mat &img, std::vector<cv::Point> &i
     responseMap.push_back(new ResponseLayer(w/16, h/16, s*16, 291));
     responseMap.push_back(new ResponseLayer(w/16, h/16, s*16, 387));
   }
+
+  uint64_t numIntervalSlots = intervals + ((octaves - 1) * (intervals / 2));
+  this->gpuDeterminantSize = numIntervalSlots * i_width * i_height *sizeof(float);
+  cudaMalloc((void**)&(this->gpuDeterminants), this->gpuDeterminantSize);
+  cudaMemset(this->gpuDeterminants, 0, this->gpuDeterminantSize);
 }
 
 
@@ -236,6 +252,44 @@ void FastHessian::buildResponseLayer(ResponseLayer *rl)
     }
   }
 }
+
+void FastHessian::buildResponseLayer__CUDA()
+{
+
+  int currentStep = init_sample;
+  for (int i = 0; i < this->octaves; ++i)
+  {
+    int borderOffset = borderSizesPrecomputed[i];
+    int numFilterApplications_x;
+    int numFilterApplications_y;
+    // dim3 gridDimensions;
+    numFilterApplications_x = this->integralImage.cols - (2 * borderOffset + this->init_sample - 1) / this->init_sample;
+    numFilterApplications_y = this->integralImage.rows - (2 * borderOffset + this->init_sample - 1) / this->init_sample;  
+    unsigned int gridDimension_x = (numFilterApplications_x + BLOCKDIM_X - 1) / BLOCKDIM_X;
+    unsigned int gridDimension_y = (numFilterApplications_y + BLOCKDIM_Y - 1) / BLOCKDIM_Y;
+    dim3 gridDimensions(gridDimension_x, gridDimension_y);
+    dim3 blockDimensions(BLOCKDIM_X, BLOCKDIM_Y);
+
+
+    if (i == 0)
+    {
+      //octave 0 computes for 4 intervals at once, so expand the x dimension by 4x
+      gridDimensions.x *= 4;
+    }
+
+    else
+    {
+      //octaves > 0 computes for 2 intervals at once, so expand the x dimension by 2x
+      gridDimensions.x *= 2;
+    }
+
+    LaunchKernel(gridDimensions, blockDimensions, this->gpuIntegralImage, NULL, this->integralImage.cols, 
+      this->integralImage.rows, intervals, i, currentStep, borderOffset);
+
+    currentStep *= 2;
+  }
+}
+
   
 // -------------------------------------------------------
 
