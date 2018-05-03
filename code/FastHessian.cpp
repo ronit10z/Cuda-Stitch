@@ -15,8 +15,8 @@ extern TimeAccumulator timeAccumulator;
 
 using namespace std;
 
-#define BLOCKDIM_X 16
-#define BLOCKDIM_Y 8
+#define BLOCKDIM_X 32
+#define BLOCKDIM_Y 32
 
 #define CUDA_ERROR_CHECK
 
@@ -287,8 +287,8 @@ void FastHessian::buildResponseLayer__CUDA()
   {
     int borderOffset = borderSizesPrecomputed[i];
     // dim3 gridDimensions;
-    unsigned int numFilterApplications_x = (this->integralImage.cols - (2 * borderOffset) + currentStep - 1) / currentStep;
-    unsigned int numFilterApplications_y = (this->integralImage.rows - (2 * borderOffset) + currentStep - 1) / currentStep;  
+    unsigned int numFilterApplications_x = (this->integralImage.cols + currentStep - 1) / currentStep;
+    unsigned int numFilterApplications_y = (this->integralImage.rows + currentStep - 1) / currentStep;  
     unsigned int gridDimension_x = (numFilterApplications_x + BLOCKDIM_X - 1) / BLOCKDIM_X;
     unsigned int gridDimension_y = (numFilterApplications_y + BLOCKDIM_Y - 1) / BLOCKDIM_Y;
     dim3 gridDimensions(gridDimension_x, gridDimension_y);

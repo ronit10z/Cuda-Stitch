@@ -278,14 +278,26 @@ int main(int argc, char const *argv[])
     // fh_2.getIpoints();
     EndTimer(&timeAccumulator, INTEREST_POINT_DETECTION);
 
+    printf("height = %d, width = %d\n", integralImage_1.rows, integralImage_1.cols);
 
-      for (int i = 0; i < integralImage_1.rows * integralImage_1.cols; ++i)
+    for (int in = 0; in < 4; ++in)
+    {
+      for (int i = 0; i < integralImage_1.rows; ++i)
       {
-        // printf("%f %f\n", fh_1.responseMap[1]->responses[i], hostDeterminants[i + integralImage_1.rows*integralImage_1.cols]);
-
-        // printf("%f \n", fh_1.responseMap[1]->responses[i]);
-        printf("%f \n", hostDeterminants[i + (integralImage_1.rows*integralImage_1.cols) * 1]);
+        for (int j = 0; j < integralImage_1.cols; ++j)
+        {
+          int offset = in * (integralImage_1.rows * integralImage_1.cols);
+          int index = (i * integralImage_1.cols + j);
+          // printf("%f %f\n", fh_1.responseMap[a]->responses[index], hostDeterminants[index + offset]);
+          bool isCorrect = abs(fh_1.responseMap[in]->responses[index] - hostDeterminants[index + offset]) < 0.0000001;
+          if (!isCorrect)
+          {
+            printf("%f %d %d\n", hostDeterminants[index], i, j);
+          }
+        }
       }
+      
+    }
     exit(1);   
 
     StartTimer(&timeAccumulator, DESCRIPTOR_EXTRACTION);    

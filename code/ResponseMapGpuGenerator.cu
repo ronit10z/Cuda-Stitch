@@ -49,38 +49,25 @@ __global__ void GetResponses__CUDA(int* lobeSizesPrecomputed__CUDA, float* integ
 		int numIntervals, int octaveNum, int stepSize, int borderOffset)
 
 {
-	int integralImageRow = (blockIdx.y * blockDim.y + threadIdx.y);
-	// need to mul by step size to take downsampling into account
-	integralImageRow *= stepSize;
-	// outside border is all zero. MAGA
-	// integralImageRow += borderOffset;
+	int integralImageRow = (blockIdx.y * blockDim.y + threadIdx.y) * stepSize;
 
-	// need to know the size in block that corresponds to one intervals worth 
 	int blocksPerInterval_x = gridDim.x / numIntervals;
 	int integralImageCol = (blockIdx.x % blocksPerInterval_x);
 	integralImageCol *= blockDim.x; // getting down to thread idx
 	integralImageCol += threadIdx.x;
 	integralImageCol *= stepSize;
-	// integralImageCol += borderOffset;
 
-	if (integralImageCol >= width - borderOffset || integralImageRow >= height - borderOffset) return;
+  if (integralImageCol >= width || integralImageRow >= height) 
+  {
+    return;
+  }
 
-	int lobeSizesPrecomputedOffset = blockIdx.x / blocksPerInterval_x;
-	// taking advantage of redundant work, octaves after 0 can skip first two integrals
-	// but the first one has to compute all 4 :(
-	if (octaveNum != 0)
-	{
-		lobeSizesPrecomputedOffset += 2;
-	}
-	// filter construction
+	int lobeSizesPrecomputedOffset = blockIdx.x / blocksPerInterval_x + (octaveNum > 0) * 2;
 
-	// Terminology borrowed from original SURF paper.
-	// const int lobeSize = lobeSizesPrecomputed__CUDA[octaveNum * numIntervals + lobeSizesPrecomputedOffset];
 	const int lobeSize = lobeSizesPrecomputed__CUDA[octaveNum * numIntervals + lobeSizesPrecomputedOffset];;
 	const int filterSize = lobeSize * 3;
 	const int borderSize = filterSize / 2 + 1;
 
-	// Filter responses to be used in approximated determinant.  Taken from original SURF paper.
 	float Dxx = BoxIntegral__CUDA(integralImage, width, height, integralImageRow - lobeSize + 1, integralImageCol - borderSize, 2*lobeSize - 1, filterSize)
           - BoxIntegral__CUDA(integralImage, width, height, integralImageRow - lobeSize + 1, integralImageCol - lobeSize / 2, 2*lobeSize - 1, lobeSize)*3;
   float Dyy = BoxIntegral__CUDA(integralImage, width, height, integralImageRow - borderSize, integralImageCol - lobeSize + 1, filterSize, 2*lobeSize - 1)
@@ -95,28 +82,11 @@ __global__ void GetResponses__CUDA(int* lobeSizesPrecomputed__CUDA, float* integ
   Dyy *= inverseArea;
   Dxy *= inverseArea;
 
-  // Approximation formula taken from original SURF paper
   float determinant = (Dxx * Dyy - 0.81f * Dxy * Dxy);
-
-  //because we compute multiple intervals worth of responses per kernel launch, determine which interval we're currently on
-  //value will be between 0 and 3 for octave 0, and either 0 or 1 for octaves > 0
 
   unsigned int computed_interval = octaveNum * numIntervals + lobeSizesPrecomputedOffset;
   unsigned int interval_start_index = computed_interval * width * height;
   unsigned int determinant_pixel_index = interval_start_index + (integralImageRow * width + integralImageCol);
 
-  // if (blockIdx.x == 0 && blockIdx.y == 0 && threadIdx.x == 0 && threadIdx.y == 0)
-  // {
-  // 	// printf("det=%f idx=%d  interval=%d intervalStart=%d width=%d row=%d col=%d\n", determinant, determinant_pixel_index, computed_interval, interval_start_index, width, integralImageRow,  integralImageCol);
-  // 	printf("%f r=%d c=%d b=%d l=%d w=%d\n", determinant, integralImageRow, integralImageCol, borderSize, lobeSizesPrecomputed__CUDA[0], filterSize);
-  // 	asm("trap;");
-  	
-  // }
-
-  // printf("%d\n", stepSize);
-  // if (determinant_pixel_index % 2 ==1)
-  // {
-  // 	printf("%d\n", determinant_pixel_index);
-  // }
   determinants[determinant_pixel_index] = determinant;
 }	
