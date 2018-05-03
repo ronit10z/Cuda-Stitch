@@ -206,9 +206,9 @@ int main(int argc, char const *argv[])
   GenerateIntegralImage(gray32_2, integralImage_2);
   EndTimer(&timeAccumulator, SUMMED_TABLE);
   std::vector<Point> interestPoints1;
-  FastHessian fh_1(integralImage_1, gray32_1, interestPoints1, 1, 4, SAMPLING_RATE, 0.00004f);
+  FastHessian fh_1(integralImage_1, gray32_1, interestPoints1, 4, 4, SAMPLING_RATE, 0.00004f);
   std::vector<Point> interestPoints2;
-  FastHessian fh_2(integralImage_2, gray32_2, interestPoints2, 1, 4, SAMPLING_RATE, 0.00004f);
+  FastHessian fh_2(integralImage_2, gray32_2, interestPoints2, 4, 4, SAMPLING_RATE, 0.00004f);
   // END FIRST RUN BS
 
   vector<cv::Point>points_1;
@@ -280,24 +280,35 @@ int main(int argc, char const *argv[])
 
     printf("height = %d, width = %d\n", integralImage_1.rows, integralImage_1.cols);
 
-    for (int in = 0; in < 4; ++in)
-    {
-      for (int i = 0; i < integralImage_1.rows; ++i)
+    // for (int in = 0; in < 4; ++in)
+    // {
+    int in = 8;
+    int step = 8;
+      for (int i = 0; i < integralImage_1.rows/step; ++i)
       {
-        for (int j = 0; j < integralImage_1.cols; ++j)
+        for (int j = 0; j < integralImage_1.cols/step; ++j)
         {
           int offset = in * (integralImage_1.rows * integralImage_1.cols);
-          int index = (i * integralImage_1.cols + j);
-          // printf("%f %f\n", fh_1.responseMap[a]->responses[index], hostDeterminants[index + offset]);
-          bool isCorrect = abs(fh_1.responseMap[in]->responses[index] - hostDeterminants[index + offset]) < 0.0000001;
-          if (!isCorrect)
+          int index = (i * integralImage_1.cols/step + j);
+          int idx = (step*i * integralImage_1.cols + step*j);
+
+          float seq = fh_1.responseMap[in]->responses[index];
+          float par = hostDeterminants[idx + offset];
+
+          if (!(abs(seq - par) < 0.0000001))
           {
-            printf("%f %d %d\n", hostDeterminants[index], i, j);
+            printf("%f %f %d %d \n", seq, par, i , j);
+            exit(1);
           }
+          // bool isCorrect = abs(fh_1.responseMap[in]->responses[index] - hostDeterminants[index + offset]) < 0.0000001;
+          // if (!isCorrect)
+          // {
+          //   printf("%f %d %d\n", hostDeterminants[index], i, j);
+          // }
         }
       }
       
-    }
+    // }
     exit(1);   
 
     StartTimer(&timeAccumulator, DESCRIPTOR_EXTRACTION);    

@@ -88,5 +88,6 @@ __global__ void GetResponses__CUDA(int* lobeSizesPrecomputed__CUDA, float* integ
   unsigned int interval_start_index = computed_interval * width * height;
   unsigned int determinant_pixel_index = interval_start_index + (integralImageRow * width + integralImageCol);
 
+  // if(octaveNum == 1 && computed_interval == 4) printf("%d %d %d %d\n", determinant_pixel_index - 3 *(width * height), integralImageRow, integralImageCol, computed_interval);
   determinants[determinant_pixel_index] = determinant;
 }	
