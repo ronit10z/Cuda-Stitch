@@ -53,7 +53,7 @@ inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=t
    }
 }
 
-void drawIpoints(Mat img_1, cudaPoint* ipts, int size);
+void drawIpoints(Mat img_1, vector<Point> &ipts);
 
 //-------------------------------------------------------
 
@@ -271,7 +271,7 @@ int main(int argc, char const *argv[])
     // Compute Interest Points from summed table representation
     StartTimer(&timeAccumulator, INTEREST_POINT_DETECTION);
     fh_1.SetImage(integralImage_1, gray32_1);
-    fh_1.getIpoints();
+    // fh_1.getIpoints();
     fh_1.buildResponseLayer__CUDA();
     gpuErrchk(cudaDeviceSynchronize());
     fh_1.NMS__CUDA();
@@ -279,21 +279,29 @@ int main(int argc, char const *argv[])
     
     // cudaMemcpy(hostDeterminants, fh_1.gpuDeterminants, fh_1.gpuDeterminantSize, cudaMemcpyDeviceToHost);
     // gpuErrchk(cudaDeviceSynchronize());
-    // fh_2.SetImage(integralImage_2, gray32_2);
-    // fh_2.getIpoints();
+    fh_2.SetImage(integralImage_2, gray32_2);
+    fh_2.getIpoints();
     // for (int i = 0; i < fh_1.cudaInterestPointsLen; ++i)
     // {
     //   cudaPoint p = fh_1.hostInterestPoints[i];
     //   printf("%d %d\n", p.x, p.y);
     // }
-    drawIpoints(img_1, fh_1.hostInterestPoints, fh_1.cudaInterestPointsLen);
+    interestPoints1.resize(0);
+    for (int i = 0; i < fh_1.cudaInterestPointsLen; ++i)
+    {
+      int x = fh_1.hostInterestPoints[i].x;
+      int y = fh_1.hostInterestPoints[i].y;
+      if (x == -1 || y == -1) continue;
+      interestPoints1.push_back(Point(x, y));
+    }
+    // drawIpoints(img_1, points_1);
 
 
 
     EndTimer(&timeAccumulator, INTEREST_POINT_DETECTION);
 
 
-    exit(1);   
+    // exit(1);   
 
     StartTimer(&timeAccumulator, DESCRIPTOR_EXTRACTION);    
     briefDescriptor.ComputeBriefDescriptor(gray32_1, interestPoints1, descriptorVector1);
@@ -434,17 +442,20 @@ inline int fRound(float flt)
 }
 
 //! Draw all the Ipoints in the provided vector
-void drawIpoints(Mat img_1, cudaPoint* ipts, int size)
+void drawIpoints(Mat img_1, vector<Point> &ipts)
 {
+  Point ipt;
+  int r1, c1;
 
-  for(int i = 0; i < size; i++) 
+  for(unsigned int i = 0; i < ipts.size(); i++) 
   {
-    int x = ipts[i].x;
-    int y = ipts[i].y;
-    if (x == -1 || y == -1) continue;
-    circle(img_1, Point(ipts[i].x, ipts[i].y), 1, cvScalar(0, 255, 0),-1);
+    ipt = ipts[i];
+    r1 = ipt.y;
+    c1 = ipt.x;
+
+    circle(img_1, Point(c1,r1), 1, cvScalar(0, 255, 0),-1);
   }
 
-  imshow("ipts", img_1);
+  imshow("a", img_1);
   waitKey(0);
 }
