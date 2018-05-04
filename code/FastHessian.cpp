@@ -145,6 +145,16 @@ FastHessian::FastHessian(Mat &integralImage, Mat &img, std::vector<cv::Point> &i
   gpuErrchk(cudaMalloc((void**) &lobeSizesPrecomputed__CUDA, 10*sizeof(int)));
   gpuErrchk(cudaMemcpy(lobeSizesPrecomputed__CUDA, lobeSizesPrecomputed, 10 * sizeof(int), cudaMemcpyHostToDevice));
 
+  gpuErrchk(cudaMalloc((void**) &cudaLobeMap, 16*sizeof(int)));
+  gpuErrchk(cudaMemcpy(cudaLobeMap, lobeSizesPrecomputedMap, 16 * sizeof(int), cudaMemcpyHostToDevice));
+
+  this->cudaInterestPointsLen = i_width * i_height / IMG_SIZE_DIVISOR;
+  gpuErrchk(cudaMalloc((void**) &cudaInterestPoints, sizeof(cudaPoint) * cudaInterestPointsLen));
+  this->hostInterestPoints = (cudaPoint*)malloc(i_width * i_height * sizeof(cudaPoint) / IMG_SIZE_DIVISOR);
+
+  gpuErrchk(cudaMalloc((void**) &atomicCounter, sizeof(int)));
+
+
   gpuErrchk(cudaDeviceSynchronize());
 }
 
@@ -302,6 +312,43 @@ void FastHessian::buildResponseLayer__CUDA()
 
     currentStep *= 2;
   }
+}
+
+void FastHessian::NMS__CUDA()
+{
+  int currentStep = init_sample;
+
+  gpuErrchk(cudaMemset(this->atomicCounter, 0, sizeof(int)));
+  gpuErrchk(cudaMemset(this->cudaInterestPoints, -1, sizeof(cudaPoint) * this->cudaInterestPointsLen));
+
+  cudaDeviceSynchronize();
+
+  for (int i = 0; i < this->octaves; ++i)
+  {
+    int extrudedStep = 3 * currentStep;
+    int numNMSApplications_x = (this->integralImage.cols + extrudedStep - 1) / (extrudedStep);
+    int numNMSApplications_y = (this->integralImage.rows + extrudedStep - 1) / (extrudedStep);
+    int intervalsPerNMS = 3;
+    int numNMSApplications_intervals = (this->intervals + intervalsPerNMS - 1) / intervalsPerNMS;
+
+    unsigned int gridDimension_x = (numNMSApplications_x + BLOCKDIM_X - 1) / BLOCKDIM_X;
+    unsigned int gridDimension_y = (numNMSApplications_y + BLOCKDIM_Y - 1) / BLOCKDIM_Y;
+    gridDimension_x *= numNMSApplications_intervals;
+
+    dim3 gridDimensions(gridDimension_x, gridDimension_y);
+    dim3 blockDimensions(BLOCKDIM_X, BLOCKDIM_Y);
+
+    printf("launching\n");
+    LaunchNMSKernel(gridDimensions, blockDimensions, this->gpuDeterminants, this->cudaInterestPoints, this->atomicCounter, 
+      this->cudaLobeMap, this->integralImage.cols, this->integralImage.rows, this->intervals, i, 
+      currentStep, numNMSApplications_intervals, this->thresh);
+
+    currentStep *= 2;
+  }
+
+  cudaMemcpy(this->hostInterestPoints, this->cudaInterestPoints, sizeof(cudaPoint) * this->cudaInterestPointsLen, cudaMemcpyDeviceToHost);
+  cudaDeviceSynchronize();
+  
 }
 
   

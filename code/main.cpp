@@ -26,6 +26,7 @@
 #include "FastHessian.hpp"
 #include "Timer.hpp"
 #include "Brief.hpp"
+#include "ResponseMapGpuGenerator.cu_incl"
 
 using namespace std;
 using namespace cv;
@@ -51,6 +52,8 @@ inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=t
       if (abort) exit(code);
    }
 }
+
+void drawIpoints(Mat img_1, cudaPoint* ipts, int size);
 
 //-------------------------------------------------------
 
@@ -271,44 +274,25 @@ int main(int argc, char const *argv[])
     fh_1.getIpoints();
     fh_1.buildResponseLayer__CUDA();
     gpuErrchk(cudaDeviceSynchronize());
-    
-    cudaMemcpy(hostDeterminants, fh_1.gpuDeterminants, fh_1.gpuDeterminantSize, cudaMemcpyDeviceToHost);
+    fh_1.NMS__CUDA();
     gpuErrchk(cudaDeviceSynchronize());
+    
+    // cudaMemcpy(hostDeterminants, fh_1.gpuDeterminants, fh_1.gpuDeterminantSize, cudaMemcpyDeviceToHost);
+    // gpuErrchk(cudaDeviceSynchronize());
     // fh_2.SetImage(integralImage_2, gray32_2);
     // fh_2.getIpoints();
+    // for (int i = 0; i < fh_1.cudaInterestPointsLen; ++i)
+    // {
+    //   cudaPoint p = fh_1.hostInterestPoints[i];
+    //   printf("%d %d\n", p.x, p.y);
+    // }
+    drawIpoints(img_1, fh_1.hostInterestPoints, fh_1.cudaInterestPointsLen);
+
+
+
     EndTimer(&timeAccumulator, INTEREST_POINT_DETECTION);
 
-    printf("height = %d, width = %d\n", integralImage_1.rows, integralImage_1.cols);
 
-    // for (int in = 0; in < 4; ++in)
-    // {
-    int in = 8;
-    int step = 8;
-      for (int i = 0; i < integralImage_1.rows/step; ++i)
-      {
-        for (int j = 0; j < integralImage_1.cols/step; ++j)
-        {
-          int offset = in * (integralImage_1.rows * integralImage_1.cols);
-          int index = (i * integralImage_1.cols/step + j);
-          int idx = (step*i * integralImage_1.cols + step*j);
-
-          float seq = fh_1.responseMap[in]->responses[index];
-          float par = hostDeterminants[idx + offset];
-
-          if (!(abs(seq - par) < 0.0000001))
-          {
-            printf("%f %f %d %d \n", seq, par, i , j);
-            exit(1);
-          }
-          // bool isCorrect = abs(fh_1.responseMap[in]->responses[index] - hostDeterminants[index + offset]) < 0.0000001;
-          // if (!isCorrect)
-          // {
-          //   printf("%f %d %d\n", hostDeterminants[index], i, j);
-          // }
-        }
-      }
-      
-    // }
     exit(1);   
 
     StartTimer(&timeAccumulator, DESCRIPTOR_EXTRACTION);    
@@ -450,17 +434,17 @@ inline int fRound(float flt)
 }
 
 //! Draw all the Ipoints in the provided vector
-// void drawIpoints(Mat img_1, vector<InterestPoint> &ipts)
-// {
-//   InterestPoint *ipt;
-//   int r1, c1;
+void drawIpoints(Mat img_1, cudaPoint* ipts, int size)
+{
 
-//   for(unsigned int i = 0; i < ipts.size(); i++) 
-//   {
-//     ipt = &ipts.at(i);
-//     r1 = fRound(ipt->position.second);
-//     c1 = fRound(ipt->position.first);
+  for(int i = 0; i < size; i++) 
+  {
+    int x = ipts[i].x;
+    int y = ipts[i].y;
+    if (x == -1 || y == -1) continue;
+    circle(img_1, Point(ipts[i].x, ipts[i].y), 1, cvScalar(0, 255, 0),-1);
+  }
 
-//     circle(img_1, Point(c1,r1), 1, cvScalar(0, 255, 0),-1);
-//   }
-// }
+  imshow("ipts", img_1);
+  waitKey(0);
+}

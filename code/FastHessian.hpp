@@ -6,6 +6,9 @@
 #include <opencv2/highgui.hpp>
 #include <opencv2/stitching.hpp>
 #include <opencv2/opencv.hpp>
+
+#include "ResponseMapGpuGenerator.cu_incl"
+
 using namespace cv;
 
 #include <vector>
@@ -17,7 +20,7 @@ static const int INIT_SAMPLE = 2;
 
 static const int lobeSizesPrecomputed[] = {3, 5, 7, 9, 13, 17, 25, 33, 49, 65};
 static const int borderSizesPrecomputed[] = {14, 26, 50, 98};
-
+static const int lobeSizesPrecomputedMap[] = {0, 1, 2, 3, 1, 3, 4, 5, 3, 5, 6, 7, 5, 7, 8, 9};
 
 class FastHessian {
   
@@ -32,6 +35,7 @@ class FastHessian {
 	void SetImage(Mat &integralImage, Mat &img);
 	void getIpoints();
 	void buildResponseLayer__CUDA();
+	void NMS__CUDA();
 	void setGpuIntegralImage(float* integralImage);
 	
 	float* gpuIntegralImage;
@@ -39,6 +43,8 @@ class FastHessian {
 	float* gpuDeterminants;
 	std::vector<ResponseLayer *> responseMap;
 	int* lobeSizesPrecomputed__CUDA;
+	cudaPoint* hostInterestPoints;
+	int cudaInterestPointsLen;
   private:
 
 	//---------------- Private Functions -----------------//
@@ -75,4 +81,7 @@ class FastHessian {
 	int init_sample;
 
 	float thresh;
+	int* atomicCounter;
+	cudaPoint* cudaInterestPoints;
+	int* cudaLobeMap;
 };

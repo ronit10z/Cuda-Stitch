@@ -6,9 +6,24 @@
 
 // __device__ __constant__ int lobeSizesPrecomputed__CUDA[10];
 
+
+struct cudaPoint
+{
+	int x;
+	int y;
+};
+
 __device__ inline float BoxIntegral__CUDA(float* integralImage, int width, int height, int widthStep, int row, int col, int rows, int cols);
 __global__ void GetResponses__CUDA(int* lobeSizesPrecomputed__CUDA, float* integralImage, float* determinants, int width ,int height, 
 		int numIntervals, int octaveNum, int stepSize, int borderOffset);
 
 void LaunchKernel(dim3 gridDimensions, dim3 blockDimensions, int* lobeSizesPrecomputed__CUDA, float* gpuIntegralImage, float* determinants, int width ,int height, 
 		int numIntervals, int octaveNum, int stepSize, int borderOffset);
+
+void LaunchNMSKernel(dim3 gridDimensions, dim3 blockDimensions, float* determinants, cudaPoint* ipts, int* atomicCounter, int* lobeMap, int width, int height, int numIntervals, int octaveNum, 
+	int stepSize, int numNMSApplications_intervals, float thresh);
+
+__global__ void NMS__CUDA(float* determinants, cudaPoint* ipts, int* lobeMap, int* atomicCounter, int width, int height, int numIntervals, int octaveNum, 
+	int stepSize, int numNMSApplications_intervals, float thresh);
+
+#define IMG_SIZE_DIVISOR 20

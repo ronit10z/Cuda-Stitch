@@ -6,6 +6,7 @@
 #include "ResponseMapGpuGenerator.cu_incl"
 
 
+
 #define CUDA_ERROR_CHECK
 
 #define gpuErrchk(ans) { gpuAssert((ans), __FILE__, __LINE__); }
@@ -24,6 +25,14 @@ void LaunchKernel(dim3 gridDimensions, dim3 blockDimensions, int* lobeSizesPreco
 	GetResponses__CUDA <<<gridDimensions, blockDimensions>>> (lobeSizesPrecomputed__CUDA, gpuIntegralImage, determinants, width, height, numIntervals, octaveNum, stepSize, borderOffset);
 	gpuErrchk(cudaPeekAtLastError());
 	gpuErrchk(cudaDeviceSynchronize());
+}
+
+void LaunchNMSKernel(dim3 gridDimensions, dim3 blockDimensions, float* determinants, cudaPoint* ipts, int* atomicCounter, int* lobeMap, int width, int height, int numIntervals, int octaveNum, 
+  int stepSize, int numNMSApplications_intervals, float thresh)
+{
+  NMS__CUDA<<<gridDimensions, blockDimensions>>>(determinants, ipts, atomicCounter, lobeMap, width, height, numIntervals, octaveNum, stepSize, numNMSApplications_intervals, thresh);
+  gpuErrchk(cudaPeekAtLastError());
+  gpuErrchk(cudaDeviceSynchronize());
 }
 
 
@@ -90,4 +99,97 @@ __global__ void GetResponses__CUDA(int* lobeSizesPrecomputed__CUDA, float* integ
 
   // if(octaveNum == 1 && computed_interval == 4) printf("%d %d %d %d\n", determinant_pixel_index - 3 *(width * height), integralImageRow, integralImageCol, computed_interval);
   determinants[determinant_pixel_index] = determinant;
-}	
+}
+
+
+__device__ inline static float GetDeterminantFromRelativeOffset(float* determinants, int* lobeMap, int octaveNum, int intervalOffset, int rowOffset, int colOffset, 
+  int numIntervals, int width, int height)
+{
+  int currentInterval = lobeMap[octaveNum * numIntervals + intervalOffset];
+  int detOffset = currentInterval * (width * height);
+  int detIndex = detOffset + (rowOffset * width) + colOffset;
+
+  return determinants[detIndex];
+}
+
+__device__ inline static bool AreNeighborsInBound(int bestRow, int bestCol, int bestInterval, int stepSize, int numIntervals, int width, int height)
+{
+  bool intervalInBound = (bestInterval > 0) && (bestInterval < numIntervals - 1);
+  bool rowInBound = (bestRow > stepSize) && (bestRow < height - stepSize);
+  bool colInBound = (bestCol > stepSize) && (bestCol < width - stepSize);
+
+  return intervalInBound && rowInBound && colInBound;
+}
+
+__global__ void NMS__CUDA(float* determinants, cudaPoint* ipts, int* lobeMap, int* atomicCounter, int width, int height, int numIntervals, int octaveNum, 
+  int stepSize, int numNMSApplications_intervals, float thresh)
+{
+  int extrudedStep = 3 * stepSize;
+  int blocksPerNMS = gridDim.x / numNMSApplications_intervals;
+
+  int firstNMSBlock = (blockIdx.x / blocksPerNMS) * 3;
+
+  // corresponds to the row and col in one of the points in the nms application, 
+  // so it is every 3 beacuse nms is 3x3x3
+  int row = (blockIdx.y * blockDim.y + threadIdx.y) * extrudedStep;
+  int col = (blockIdx.x % blocksPerNMS);
+  col *= blockDim.x;
+  col += threadIdx.x;
+  col *= 3 * stepSize;
+
+  if (row >= height || col >= width || firstNMSBlock >= numIntervals)
+  {
+    return;
+  }
+
+  float bestVal = -1;
+  int bestCol = -1;
+  int bestRow = -1;
+  int bestInterval = -1;
+
+  for (int intervalOffset = firstNMSBlock; intervalOffset < min(firstNMSBlock + 3, numIntervals - 1); ++intervalOffset)
+  {
+    for (int rowOffset = row; rowOffset < min(row + extrudedStep, height); rowOffset += stepSize)
+    {
+      for (int colOffset = col; colOffset < min(col + extrudedStep, width); colOffset += stepSize)
+      {
+        float currentVal = GetDeterminantFromRelativeOffset(determinants, lobeMap, octaveNum, intervalOffset, rowOffset, colOffset, 
+          numIntervals, width, height);
+
+        if (currentVal > bestVal)
+        {
+          bestVal = currentVal;
+          bestCol = colOffset;
+          bestRow = rowOffset;
+          bestInterval = intervalOffset;
+        }
+      }
+    }
+  }
+
+  if (AreNeighborsInBound(bestRow, bestCol, bestInterval, stepSize, numIntervals, width, height))
+  {
+    for (int i = bestInterval - 1; i < bestInterval + 1; ++i)
+    {
+      for (int r = bestRow - stepSize; r < bestRow + stepSize; r += stepSize)
+      {
+        for (int c = bestCol - stepSize; c < bestCol + stepSize; c += stepSize)
+        {
+          float currentVal = GetDeterminantFromRelativeOffset(determinants, lobeMap, octaveNum, i, r, c, 
+          numIntervals, width, height);
+          if (currentVal > bestVal) return;
+        }
+      }
+    }
+  }
+
+  if (bestVal > thresh && bestInterval != -1)
+  {
+    int index = atomicAdd(atomicCounter, 1);
+    if(index  < width * height)
+    {
+      ipts[index].x = bestCol;
+      ipts[index].y = bestRow;
+    }
+  }
+}
