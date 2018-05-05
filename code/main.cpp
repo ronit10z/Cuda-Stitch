@@ -274,6 +274,8 @@ int main(int argc, char const *argv[])
     // fh_1.getIpoints();
     fh_1.buildResponseLayer__CUDA();
     gpuErrchk(cudaDeviceSynchronize());
+
+
     fh_1.NMS__CUDA();
     gpuErrchk(cudaDeviceSynchronize());
     
@@ -294,7 +296,7 @@ int main(int argc, char const *argv[])
       if (x == -1 || y == -1) continue;
       interestPoints1.push_back(Point(x, y));
     }
-    // drawIpoints(img_1, points_1);
+    // drawIpoints(img_1, interestPoints1);
 
 
 

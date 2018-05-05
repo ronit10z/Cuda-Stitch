@@ -15,7 +15,7 @@ using namespace cv;
 
 static const int OCTAVES = 5;
 static const int INTERVALS = 4;
-static const float THRES = 0.0004f;
+static const float THRES = 1000.0f;
 static const int INIT_SAMPLE = 2;
 
 static const int lobeSizesPrecomputed[] = {3, 5, 7, 9, 13, 17, 25, 33, 49, 65};

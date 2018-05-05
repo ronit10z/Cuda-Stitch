@@ -27,12 +27,19 @@ void LaunchKernel(dim3 gridDimensions, dim3 blockDimensions, int* lobeSizesPreco
 	gpuErrchk(cudaDeviceSynchronize());
 }
 
+
+
 void LaunchNMSKernel(dim3 gridDimensions, dim3 blockDimensions, float* determinants, cudaPoint* ipts, int* atomicCounter, int* lobeMap, int width, int height, int numIntervals, int octaveNum, 
   int stepSize, int numNMSApplications_intervals, float thresh)
 {
-  NMS__CUDA<<<gridDimensions, blockDimensions>>>(determinants, ipts, atomicCounter, lobeMap, width, height, numIntervals, octaveNum, stepSize, numNMSApplications_intervals, thresh);
+   // LaunchNMSKernel(gridDimensions, blockDimensions, this->gpuDeterminants, this->cudaInterestPoints, this->atomicCounter, 
+   //    this->cudaLobeMap, this->integralImage.cols, this->integralImage.rows, this->intervals, i, 
+   //    currentStep, numNMSApplications_intervals, this->thresh);
+
+  NMS__CUDA<<<gridDimensions, blockDimensions>>>(determinants, ipts, lobeMap, atomicCounter, width, height, numIntervals, octaveNum, stepSize, numNMSApplications_intervals, thresh);
   gpuErrchk(cudaPeekAtLastError());
   gpuErrchk(cudaDeviceSynchronize());
+
 }
 
 
@@ -101,7 +108,6 @@ __global__ void GetResponses__CUDA(int* lobeSizesPrecomputed__CUDA, float* integ
   determinants[determinant_pixel_index] = determinant;
 }
 
-
 __device__ inline static float GetDeterminantFromRelativeOffset(float* determinants, int* lobeMap, int octaveNum, int intervalOffset, int rowOffset, int colOffset, 
   int numIntervals, int width, int height)
 {
@@ -114,9 +120,12 @@ __device__ inline static float GetDeterminantFromRelativeOffset(float* determina
 
 __device__ inline static bool AreNeighborsInBound(int bestRow, int bestCol, int bestInterval, int stepSize, int numIntervals, int width, int height)
 {
+  //I think this is right, but, is numintervals 4 or 10 here? Which should it be?
   bool intervalInBound = (bestInterval > 0) && (bestInterval < numIntervals - 1);
-  bool rowInBound = (bestRow > stepSize) && (bestRow < height - stepSize);
-  bool colInBound = (bestCol > stepSize) && (bestCol < width - stepSize);
+
+  //I think these should be >= and not just > as it was before, because if bestRow = stepSize we can subtract a stepSize and get to row 0
+  bool rowInBound = (bestRow >= stepSize) && (bestRow < height - stepSize);
+  bool colInBound = (bestCol >= stepSize) && (bestCol < width - stepSize);
 
   return intervalInBound && rowInBound && colInBound;
 }
@@ -124,6 +133,11 @@ __device__ inline static bool AreNeighborsInBound(int bestRow, int bestCol, int 
 __global__ void NMS__CUDA(float* determinants, cudaPoint* ipts, int* lobeMap, int* atomicCounter, int width, int height, int numIntervals, int octaveNum, 
   int stepSize, int numNMSApplications_intervals, float thresh)
 {
+
+   // LaunchNMSKernel(gridDimensions, blockDimensions, this->gpuDeterminants, this->cudaInterestPoints, this->atomicCounter, 
+   //    this->cudaLobeMap, this->integralImage.cols, this->integralImage.rows, this->intervals, i, 
+   //    currentStep, numNMSApplications_intervals, this->thresh);
+
   int extrudedStep = 3 * stepSize;
   int blocksPerNMS = gridDim.x / numNMSApplications_intervals;
 
@@ -147,6 +161,8 @@ __global__ void NMS__CUDA(float* determinants, cudaPoint* ipts, int* lobeMap, in
   int bestRow = -1;
   int bestInterval = -1;
 
+
+  //Find the maximum response in a 3x3x3 region across rows, cols, intervals
   for (int intervalOffset = firstNMSBlock; intervalOffset < min(firstNMSBlock + 3, numIntervals - 1); ++intervalOffset)
   {
     for (int rowOffset = row; rowOffset < min(row + extrudedStep, height); rowOffset += stepSize)
@@ -167,22 +183,30 @@ __global__ void NMS__CUDA(float* determinants, cudaPoint* ipts, int* lobeMap, in
     }
   }
 
+  //Extend the maximal search if there are neighbors to search across
   if (AreNeighborsInBound(bestRow, bestCol, bestInterval, stepSize, numIntervals, width, height))
   {
-    for (int i = bestInterval - 1; i < bestInterval + 1; ++i)
+    //the loopguard is a <= rather than just a <
+    for (int i = bestInterval - 1; i <= bestInterval + 1; ++i)
     {
-      for (int r = bestRow - stepSize; r < bestRow + stepSize; r += stepSize)
+      for (int r = bestRow - stepSize; r <= bestRow + stepSize; r += stepSize)
       {
-        for (int c = bestCol - stepSize; c < bestCol + stepSize; c += stepSize)
+        for (int c = bestCol - stepSize; c <= bestCol + stepSize; c += stepSize)
         {
-          float currentVal = GetDeterminantFromRelativeOffset(determinants, lobeMap, octaveNum, i, r, c, 
-          numIntervals, width, height);
-          if (currentVal > bestVal) return;
+          //Get the value in the downsampled image pyramid from the interval offset in the octave, row, and col
+          if (i != 0 || r != 0 || c != 0) {
+            float currentVal = GetDeterminantFromRelativeOffset(determinants, lobeMap, octaveNum, i, r, c, 
+            numIntervals, width, height);
+            if (currentVal > bestVal) return;
+          }
         }
       }
     }
   }
 
+  // printf("Threshold: %f\n", thresh);
+
+  //if we get to this point, the candiate point is a local extremum
   if (bestVal > thresh && bestInterval != -1)
   {
     int index = atomicAdd(atomicCounter, 1);
