@@ -26,4 +26,4 @@ void LaunchNMSKernel(dim3 gridDimensions, dim3 blockDimensions, float* determina
 __global__ void NMS__CUDA(float* determinants, cudaPoint* ipts, int* lobeMap, int* atomicCounter, int width, int height, int numIntervals, int octaveNum, 
 	int stepSize, int numNMSApplications_intervals, float thresh);
 
-#define IMG_SIZE_DIVISOR 1
+#define IMG_SIZE_DIVISOR 50

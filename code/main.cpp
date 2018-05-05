@@ -108,10 +108,16 @@ Mat stitchImages(Mat& pano, const Mat& image, const Mat& H, Mat& pano_mask, Mat&
   int width = pano.cols;
   int height = pano.rows;
 
+  cuda::GpuMat src_gpu, dst_gpu;
+  src_gpu.upload(image);
+
   Mat image_warped;
   image_warped.create(image.size(), image.type());
+  // dst_gpu.upload(image_warped);
 
-  warpPerspective(image, image_warped, H, Size(width, height));
+  cuda::warpPerspective(src_gpu, dst_gpu, H, Size(width, height));
+  // warpPerspective(image, image_warped, H, Size(width, height));
+  dst_gpu.download(image_warped);
 
   Mat bim1, bim2;
   img_mask.convertTo(img_mask, image_warped.type());
@@ -209,9 +215,9 @@ int main(int argc, char const *argv[])
   GenerateIntegralImage(gray32_2, integralImage_2);
   EndTimer(&timeAccumulator, SUMMED_TABLE);
   std::vector<Point> interestPoints1;
-  FastHessian fh_1(integralImage_1, gray32_1, interestPoints1, 4, 4, SAMPLING_RATE, 0.00004f);
+  FastHessian fh_1(integralImage_1, gray32_1, interestPoints1, 5, 4, SAMPLING_RATE, 0.00004f);
   std::vector<Point> interestPoints2;
-  FastHessian fh_2(integralImage_2, gray32_2, interestPoints2, 4, 4, SAMPLING_RATE, 0.00004f);
+  FastHessian fh_2(integralImage_2, gray32_2, interestPoints2, 5, 4, SAMPLING_RATE, 0.00004f);
   // END FIRST RUN BS
 
   vector<cv::Point>points_1;
@@ -259,19 +265,18 @@ int main(int argc, char const *argv[])
     GenerateIntegralImage(gray32_2, integralImage_2);
     EndTimer(&timeAccumulator, SUMMED_TABLE);
 
-    float* integralPointer_1 = (float*)(integralImage_1.data);
-    float* integralPointer_2 = (float*)(integralImage_2.data);
-
     
     // Compute Interest Points from summed table representation
     StartTimer(&timeAccumulator, INTEREST_POINT_DETECTION);
+
+    fh_1.SetImage(integralImage_1, gray32_1);
+    fh_2.SetImage(integralImage_2, gray32_2);
+    
     // fh_1.getIpoints();
     // fh_2.getIpoints();
-    
     fh_1.getIpoints__CUDA();
     fh_2.getIpoints__CUDA();
-    gpuErrchk(cudaDeviceSynchronize());
-    
+
 
     EndTimer(&timeAccumulator, INTEREST_POINT_DETECTION);
 
@@ -285,7 +290,6 @@ int main(int argc, char const *argv[])
     EndTimer(&timeAccumulator, DESCRIPTOR_MATCHING);
 
     StartTimer(&timeAccumulator, OPENCV_ROUTINES);
-
     Mat homographyMat_1 = Mat::eye(3, 3, CV_32F);
     Mat homographyMat_2 = (cv::findHomography(points_2, points_1, RANSAC, 2.0));
     homographyMat_2.convertTo(homographyMat_2, CV_32F);
@@ -338,14 +342,23 @@ int main(int argc, char const *argv[])
       Mat pano_mask = Mat::zeros(height, width, img_1.type());
 
       Mat img_mask1 = createMask(img_1);
-      cv::warpPerspective(img_mask1, img_mask1, homographyMat_1, Size(width, height));
+      cuda::GpuMat src_gpu, dst_gpu;
+
+      src_gpu.upload(img_mask1);
+      cuda::warpPerspective(src_gpu, dst_gpu, homographyMat_1, Size(width, height));
+      dst_gpu.download(img_mask1);
+      // cv::warpPerspective(img_mask1, img_mask1, homographyMat_1, Size(width, height));
       panorama = stitchImages(panorama, img_1, homographyMat_1, pano_mask, img_mask1);
 
       pano_mask = pano_mask + img_mask1;
 
       Mat img_mask2 = createMask(img_2);
-      cv::warpPerspective(img_mask2, img_mask2, homographyMat_2, Size(width, height));
+      src_gpu.upload(img_mask2);
+      cuda::warpPerspective(src_gpu, dst_gpu, homographyMat_2, Size(width, height));
+      dst_gpu.download(img_mask2);
+
       panorama = stitchImages(panorama, img_2, homographyMat_2, pano_mask, img_mask2);
+
 
       panorama *= 255;
       panorama.convertTo(panorama, CV_8UC3);

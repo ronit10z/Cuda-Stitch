@@ -37,6 +37,8 @@ class FastHessian {
 	void buildResponseLayer__CUDA();
 	void NMS__CUDA();
 	void setGpuIntegralImage(float* integralImage);
+	void getIpoints__CUDA();
+	void asyncCopyIntegralImage__CUDA();
 	
 	float* gpuIntegralImage;
 	uint64_t gpuDeterminantSize;
@@ -46,7 +48,6 @@ class FastHessian {
 	cudaPoint* hostInterestPoints;
 	int cudaInterestPointsLen;
 
-	void getIpoints__CUDA();
   private:
 
 	//---------------- Private Functions -----------------//

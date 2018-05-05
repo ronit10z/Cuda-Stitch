@@ -279,15 +279,21 @@ void FastHessian::buildResponseLayer(ResponseLayer *rl, int responseIndex)
   }
 }
 
-void FastHessian::getIpoints__CUDA()
+void FastHessian::asyncCopyIntegralImage__CUDA()
 {
   gpuErrchk(cudaMemcpy(gpuIntegralImage, (float*)integralImage.data, 
-  sizeof(float) * integralImage.rows * integralImage.cols, cudaMemcpyHostToDevice));
+  sizeof(float) * integralImage.rows * integralImage.cols, cudaMemcpyHostToDevice)); 
+}
+
+void FastHessian::getIpoints__CUDA()
+{
+  asyncCopyIntegralImage__CUDA();
+  gpuErrchk(cudaDeviceSynchronize());
+  buildResponseLayer__CUDA();
+  
   gpuErrchk(cudaDeviceSynchronize());
 
-  buildResponseLayer__CUDA();
   NMS__CUDA();
-
 }
 
 
@@ -316,8 +322,8 @@ void FastHessian::buildResponseLayer__CUDA()
     currentStep *= 2;
   }
 
-  gpuErrchk(cudaPeekAtLastError());
-  gpuErrchk(cudaDeviceSynchronize());
+  // gpuErrchk(cudaPeekAtLastError());
+  // gpuErrchk(cudaDeviceSynchronize());
 }
 
 void FastHessian::NMS__CUDA()
@@ -364,7 +370,11 @@ void FastHessian::NMS__CUDA()
   {
     int x = hostInterestPoints[i].x;
     int y = hostInterestPoints[i].y;
-    if (x == -1 || y == -1) continue;
+    if (x == -1 || y == -1) 
+    {
+      this->cudaInterestPointsLen = i;
+      break;
+    }
     ipts.push_back(Point(x, y));
   }
 }
