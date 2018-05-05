@@ -45,6 +45,8 @@ class FastHessian {
 	int* lobeSizesPrecomputed__CUDA;
 	cudaPoint* hostInterestPoints;
 	int cudaInterestPointsLen;
+
+	void getIpoints__CUDA();
   private:
 
 	//---------------- Private Functions -----------------//

@@ -265,22 +265,13 @@ int main(int argc, char const *argv[])
     
     // Compute Interest Points from summed table representation
     StartTimer(&timeAccumulator, INTEREST_POINT_DETECTION);
-    fh_1.getIpoints();
-    fh_2.getIpoints();
+    // fh_1.getIpoints();
+    // fh_2.getIpoints();
     
-    // gpuErrchk(cudaMemcpy(fh_1.gpuIntegralImage, integralPointer_1, 
-    //   sizeof(float) * integralImage_1.rows * integralImage_1.cols, cudaMemcpyHostToDevice));
-    // gpuErrchk(cudaMemcpy(fh_2.gpuIntegralImage, integralPointer_2, 
-    //   sizeof(float) * integralImage_2.rows * integralImage_2.cols, cudaMemcpyHostToDevice));
-    // gpuErrchk(cudaDeviceSynchronize());
-    // cudaSetDevice(1);
-    // fh_1.SetImage(integralImage_1, gray32_1);
-    // fh_1.buildResponseLayer__CUDA();
-    // fh_1.NMS__CUDA();
+    fh_1.getIpoints__CUDA();
+    fh_2.getIpoints__CUDA();
+    gpuErrchk(cudaDeviceSynchronize());
     
-    // fh_2.SetImage(integralImage_2, gray32_2);
-    // fh_2.buildResponseLayer__CUDA();
-    // fh_2.NMS__CUDA();
 
     EndTimer(&timeAccumulator, INTEREST_POINT_DETECTION);
 

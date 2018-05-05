@@ -279,6 +279,19 @@ void FastHessian::buildResponseLayer(ResponseLayer *rl, int responseIndex)
   }
 }
 
+void FastHessian::getIpoints__CUDA()
+{
+  gpuErrchk(cudaMemcpy(gpuIntegralImage, (float*)integralImage.data, 
+  sizeof(float) * integralImage.rows * integralImage.cols, cudaMemcpyHostToDevice));
+  gpuErrchk(cudaDeviceSynchronize());
+
+  buildResponseLayer__CUDA();
+  NMS__CUDA();
+
+}
+
+
+
 void FastHessian::buildResponseLayer__CUDA()
 {
 
