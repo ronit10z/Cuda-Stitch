@@ -23,8 +23,7 @@ void LaunchKernel(dim3 gridDimensions, dim3 blockDimensions, int* lobeSizesPreco
 		int numIntervals, int octaveNum, int stepSize, int borderOffset)
 {
 	GetResponses__CUDA <<<gridDimensions, blockDimensions>>> (lobeSizesPrecomputed__CUDA, gpuIntegralImage, determinants, width, height, numIntervals, octaveNum, stepSize, borderOffset);
-	gpuErrchk(cudaPeekAtLastError());
-	gpuErrchk(cudaDeviceSynchronize());
+
 }
 
 
@@ -32,13 +31,10 @@ void LaunchKernel(dim3 gridDimensions, dim3 blockDimensions, int* lobeSizesPreco
 void LaunchNMSKernel(dim3 gridDimensions, dim3 blockDimensions, float* determinants, cudaPoint* ipts, int* atomicCounter, int* lobeMap, int width, int height, int numIntervals, int octaveNum, 
   int stepSize, int numNMSApplications_intervals, float thresh)
 {
-   // LaunchNMSKernel(gridDimensions, blockDimensions, this->gpuDeterminants, this->cudaInterestPoints, this->atomicCounter, 
-   //    this->cudaLobeMap, this->integralImage.cols, this->integralImage.rows, this->intervals, i, 
-   //    currentStep, numNMSApplications_intervals, this->thresh);
 
   NMS__CUDA<<<gridDimensions, blockDimensions>>>(determinants, ipts, lobeMap, atomicCounter, width, height, numIntervals, octaveNum, stepSize, numNMSApplications_intervals, thresh);
-  gpuErrchk(cudaPeekAtLastError());
-  gpuErrchk(cudaDeviceSynchronize());
+  // gpuErrchk(cudaPeekAtLastError());
+  // gpuErrchk(cudaDeviceSynchronize());
 
 }
 

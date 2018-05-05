@@ -84,4 +84,5 @@ class FastHessian {
 	int* atomicCounter;
 	cudaPoint* cudaInterestPoints;
 	int* cudaLobeMap;
+	int cudaDeviceId;
 };

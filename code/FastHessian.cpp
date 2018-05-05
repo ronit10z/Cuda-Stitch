@@ -274,19 +274,9 @@ void FastHessian::buildResponseLayer(ResponseLayer *rl, int responseIndex)
       Dyy *= inverse_area;
       Dxy *= inverse_area;
      
-      // Get the determinant of hessian response & laplacian sign
-      // if (index == 0 && responseIndex == 0)
-      // {
-      //   printf("%f r=%d c=%d b=%d l=%d w=%d\n", (Dxx * Dyy - 0.81f * Dxy * Dxy), r, c, b, l ,w);
-      // }
-      // if (Dxx * Dyy - 0.81f * Dxy * Dxy > 0.00001)
-      // {
-      //   printf("%d %f\n", index, Dxx * Dyy - 0.81f * Dxy * Dxy );
-      // }
       responses[index++] = (Dxx * Dyy - 0.81f * Dxy * Dxy);
     }
   }
-  // exit(1);
 }
 
 void FastHessian::buildResponseLayer__CUDA()
@@ -312,6 +302,9 @@ void FastHessian::buildResponseLayer__CUDA()
 
     currentStep *= 2;
   }
+
+  gpuErrchk(cudaPeekAtLastError());
+  gpuErrchk(cudaDeviceSynchronize());
 }
 
 void FastHessian::NMS__CUDA()
@@ -338,7 +331,6 @@ void FastHessian::NMS__CUDA()
     dim3 gridDimensions(gridDimension_x, gridDimension_y);
     dim3 blockDimensions(BLOCKDIM_X, BLOCKDIM_Y);
 
-    printf("launching\n");
     LaunchNMSKernel(gridDimensions, blockDimensions, this->gpuDeterminants, this->cudaInterestPoints, this->atomicCounter, 
       this->cudaLobeMap, this->integralImage.cols, this->integralImage.rows, this->intervals, i, 
       currentStep, numNMSApplications_intervals, this->thresh);
@@ -346,9 +338,22 @@ void FastHessian::NMS__CUDA()
     currentStep *= 2;
   }
 
+  gpuErrchk(cudaPeekAtLastError());
+  gpuErrchk(cudaDeviceSynchronize());
+
   cudaMemcpy(this->hostInterestPoints, this->cudaInterestPoints, sizeof(cudaPoint) * this->cudaInterestPointsLen, cudaMemcpyDeviceToHost);
-  cudaDeviceSynchronize();
   
+  gpuErrchk(cudaDeviceSynchronize());
+
+  ipts.resize(0);
+
+  for (int i = 0; i < this->cudaInterestPointsLen; ++i)
+  {
+    int x = hostInterestPoints[i].x;
+    int y = hostInterestPoints[i].y;
+    if (x == -1 || y == -1) continue;
+    ipts.push_back(Point(x, y));
+  }
 }
 
   

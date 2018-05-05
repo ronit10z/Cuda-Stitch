@@ -144,7 +144,7 @@ void setupCudaDevice()
     printf("   CUDA Cap:   %d.%d\n", deviceProps.major, deviceProps.minor);
   }
 
-  cudaSetDevice(0);
+  cudaSetDevice(1);
 }
 
 Stitcher::Mode mode = Stitcher::PANORAMA;
@@ -262,48 +262,27 @@ int main(int argc, char const *argv[])
     float* integralPointer_1 = (float*)(integralImage_1.data);
     float* integralPointer_2 = (float*)(integralImage_2.data);
 
-    gpuErrchk(cudaMemcpy(fh_1.gpuIntegralImage, integralPointer_1, 
-      sizeof(float) * integralImage_1.rows * integralImage_1.cols, cudaMemcpyHostToDevice));
-    gpuErrchk(cudaMemcpy(fh_2.gpuIntegralImage, integralPointer_2, 
-      sizeof(float) * integralImage_2.rows * integralImage_2.cols, cudaMemcpyHostToDevice));
-    gpuErrchk(cudaDeviceSynchronize());
     
     // Compute Interest Points from summed table representation
     StartTimer(&timeAccumulator, INTEREST_POINT_DETECTION);
-    fh_1.SetImage(integralImage_1, gray32_1);
-    // fh_1.getIpoints();
-    fh_1.buildResponseLayer__CUDA();
-    gpuErrchk(cudaDeviceSynchronize());
-
-
-    fh_1.NMS__CUDA();
-    gpuErrchk(cudaDeviceSynchronize());
-    
-    // cudaMemcpy(hostDeterminants, fh_1.gpuDeterminants, fh_1.gpuDeterminantSize, cudaMemcpyDeviceToHost);
-    // gpuErrchk(cudaDeviceSynchronize());
-    fh_2.SetImage(integralImage_2, gray32_2);
+    fh_1.getIpoints();
     fh_2.getIpoints();
-    // for (int i = 0; i < fh_1.cudaInterestPointsLen; ++i)
-    // {
-    //   cudaPoint p = fh_1.hostInterestPoints[i];
-    //   printf("%d %d\n", p.x, p.y);
-    // }
-    interestPoints1.resize(0);
-    for (int i = 0; i < fh_1.cudaInterestPointsLen; ++i)
-    {
-      int x = fh_1.hostInterestPoints[i].x;
-      int y = fh_1.hostInterestPoints[i].y;
-      if (x == -1 || y == -1) continue;
-      interestPoints1.push_back(Point(x, y));
-    }
-    // drawIpoints(img_1, interestPoints1);
-
-
+    
+    // gpuErrchk(cudaMemcpy(fh_1.gpuIntegralImage, integralPointer_1, 
+    //   sizeof(float) * integralImage_1.rows * integralImage_1.cols, cudaMemcpyHostToDevice));
+    // gpuErrchk(cudaMemcpy(fh_2.gpuIntegralImage, integralPointer_2, 
+    //   sizeof(float) * integralImage_2.rows * integralImage_2.cols, cudaMemcpyHostToDevice));
+    // gpuErrchk(cudaDeviceSynchronize());
+    // cudaSetDevice(1);
+    // fh_1.SetImage(integralImage_1, gray32_1);
+    // fh_1.buildResponseLayer__CUDA();
+    // fh_1.NMS__CUDA();
+    
+    // fh_2.SetImage(integralImage_2, gray32_2);
+    // fh_2.buildResponseLayer__CUDA();
+    // fh_2.NMS__CUDA();
 
     EndTimer(&timeAccumulator, INTEREST_POINT_DETECTION);
-
-
-    // exit(1);   
 
     StartTimer(&timeAccumulator, DESCRIPTOR_EXTRACTION);    
     briefDescriptor.ComputeBriefDescriptor(gray32_1, interestPoints1, descriptorVector1);
@@ -379,9 +358,9 @@ int main(int argc, char const *argv[])
 
       panorama *= 255;
       panorama.convertTo(panorama, CV_8UC3);
-      imshow("pano", panorama);
-      waitKey(0);
-      exit(1);
+      // imshow("pano", panorama);
+      // waitKey(0);
+      // exit(1);
       Mat resizedPan;
       resize(panorama, resizedPan, frame_size);
 
